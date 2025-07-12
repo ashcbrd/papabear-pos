@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { Category } from "@prisma/client";
 
 const run = async () => {
+  // 🧹 Clean all relevant tables
   await prisma.receipt.deleteMany();
   await prisma.orderItemAddon.deleteMany();
   await prisma.orderItem.deleteMany();
@@ -15,6 +16,7 @@ const run = async () => {
   await prisma.ingredient.deleteMany();
   await prisma.stock.deleteMany();
 
+  // ➕ Addons
   const addonList = [
     { name: "Sugar", price: 3 },
     { name: "Espresso Shot", price: 10 },
@@ -33,11 +35,13 @@ const run = async () => {
       data: {
         name: addon.name,
         price: addon.price,
+        createdAt: new Date(),
         stock: { create: { quantity: 100 } },
       },
     });
   }
 
+  // ➕ Materials & Ingredients
   const materialNames = [
     "Plastic Cup",
     "Paper Wrapper",
@@ -80,6 +84,7 @@ const run = async () => {
     const unitsPerPackage = 10 + i;
     const packagePrice = 50 + i;
     const pricePerPiece = isPackage ? packagePrice / unitsPerPackage : 5 + i;
+
     const material = await prisma.material.create({
       data: {
         name: materialNames[i],
@@ -88,12 +93,14 @@ const run = async () => {
         packagePrice: isPackage ? packagePrice : null,
         pricePerPiece,
         stock: { create: { quantity: 100 } },
+        createdAt: new Date(),
       },
     });
 
     const unitsPerPurchase = 4 + i;
     const pricePerPurchase = 20 + i;
     const pricePerUnit = pricePerPurchase / unitsPerPurchase;
+
     const ingredient = await prisma.ingredient.create({
       data: {
         name: ingredientNames[i],
@@ -103,6 +110,7 @@ const run = async () => {
         pricePerPurchase,
         pricePerUnit,
         stock: { create: { quantity: 100 } },
+        createdAt: new Date(),
       },
     });
 
@@ -149,6 +157,7 @@ const run = async () => {
 
   console.log("✅ Seeded products, variants, materials, and ingredients");
 
+  // 🧾 Create dummy orders & receipts
   const allProducts = await prisma.product.findMany({
     include: { variants: true },
   });

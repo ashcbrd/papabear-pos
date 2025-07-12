@@ -246,7 +246,7 @@ export default function POSPage() {
               >
                 {item.product.variants.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.name} - ${v.price.toFixed(2)}
+                    {v.name} - P{v.price.toFixed(2)}
                   </option>
                 ))}
               </select>
@@ -272,7 +272,7 @@ export default function POSPage() {
                   <option value="">Select addon</option>
                   {addons.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.name} (${a.price.toFixed(2)})
+                      {a.name} (P{a.price.toFixed(2)})
                     </option>
                   ))}
                 </select>
@@ -306,13 +306,13 @@ export default function POSPage() {
           ))}
 
           <div className="text-right font-bold text-lg">
-            Total: ${calculateTotal().toFixed(2)}
+            Total: P{calculateTotal().toFixed(2)}
           </div>
         </div>
 
         {/* Payment */}
         <div className="flex space-x-10">
-          <div className="font-bold text-2xl">Payment: ${payment || "0"}</div>
+          <div className="font-bold text-2xl">Payment: P{payment || "0"}</div>
           <div className="font-bold text-2xl">
             Change: ₱
             {Math.max(0, parseFloat(payment || "0") - calculateTotal()).toFixed(

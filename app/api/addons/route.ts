@@ -11,6 +11,7 @@ type CreateAddonInput = {
 
 export async function GET(): Promise<NextResponse<Addon[]>> {
   const addons = await prisma.addon.findMany({
+    orderBy: { createdAt: "desc" },
     include: { stock: true },
   });
   return NextResponse.json(addons);

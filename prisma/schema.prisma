@@ -59,6 +59,7 @@ model Addon {
   name      String
   price     Float
   stock     Stock?
+  createdAt           DateTime @default(now())
   orderItemAddons OrderItemAddon[]
 }
 
