@@ -19,7 +19,6 @@ const measurementUnits = [
 export default function IngredientsAdminPage() {
   const [ingredients, setIngredients] = useState<IngredientWithStock[]>([]);
   const [name, setName] = useState("");
-  const [purchaseUnit, setPurchaseUnit] = useState("");
   const [measurementUnit, setMeasurementUnit] = useState("piece");
   const [unitsPerPurchase, setUnitsPerPurchase] = useState<number>(1);
   const [pricePerPurchase, setPricePerPurchase] = useState<number>(0);
@@ -52,7 +51,6 @@ export default function IngredientsAdminPage() {
   const createIngredient = async () => {
     const payload: IngredientInput = {
       name,
-      purchaseUnit,
       measurementUnit,
       unitsPerPurchase,
       pricePerPurchase,
@@ -66,7 +64,6 @@ export default function IngredientsAdminPage() {
     });
 
     setName("");
-    setPurchaseUnit("");
     setMeasurementUnit("piece");
     setUnitsPerPurchase(1);
     setPricePerPurchase(0);
@@ -121,13 +118,6 @@ export default function IngredientsAdminPage() {
           className="border p-2 w-full"
           value={name}
           onChange={(e) => setName(e.target.value)}
-        />
-
-        <label className="block text-sm">Purchase Unit (e.g. Tomato)</label>
-        <input
-          className="border p-2 w-full"
-          value={purchaseUnit}
-          onChange={(e) => setPurchaseUnit(e.target.value)}
         />
 
         <label className="block text-sm">Measurement Unit</label>
@@ -293,7 +283,6 @@ export default function IngredientsAdminPage() {
                         setEditingId(i.id);
                         setEditForm({
                           name: i.name,
-                          purchaseUnit: i.purchaseUnit,
                           measurementUnit: i.measurementUnit,
                           unitsPerPurchase: i.unitsPerPurchase ?? 1,
                           pricePerPurchase: i.pricePerPurchase,

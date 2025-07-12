@@ -4,7 +4,6 @@ import { Ingredient } from "@prisma/client";
 
 type CreateIngredientInput = {
   name: string;
-  purchaseUnit: string;
   measurementUnit: string;
   unitsPerPurchase?: number;
   pricePerPurchase: number;
@@ -19,19 +18,13 @@ export async function POST(
 
   const {
     name,
-    purchaseUnit,
     measurementUnit,
     unitsPerPurchase,
     pricePerPurchase,
     stockQuantity = 0,
   } = data;
 
-  if (
-    !name ||
-    !purchaseUnit ||
-    !measurementUnit ||
-    typeof pricePerPurchase !== "number"
-  ) {
+  if (!name || !measurementUnit || typeof pricePerPurchase !== "number") {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
 
@@ -43,7 +36,6 @@ export async function POST(
   const ingredient = await prisma.ingredient.create({
     data: {
       name,
-      purchaseUnit,
       measurementUnit,
       unitsPerPurchase,
       pricePerPurchase,

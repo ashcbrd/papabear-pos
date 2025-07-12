@@ -104,7 +104,6 @@ const run = async () => {
     const ingredient = await prisma.ingredient.create({
       data: {
         name: ingredientNames[i],
-        purchaseUnit: "pack",
         measurementUnit: "unit",
         unitsPerPurchase,
         pricePerPurchase,

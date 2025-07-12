@@ -19,7 +19,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <aside className="w-64 bg-white border-r shadow-sm">
+      <aside className="w-64 bg-white border-r shadow-sm fixed h-screen">
         <div className="p-4 border-b">
           <h1 className="text-xl font-bold">Admin Panel</h1>
         </div>
@@ -44,7 +44,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      <main className="flex-1 p-6">{children}</main>
+      <main className="flex-1 p-6 ml-64">{children}</main>
     </div>
   );
 }

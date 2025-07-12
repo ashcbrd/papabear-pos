@@ -31,26 +31,19 @@ export async function PUT(
 ): Promise<NextResponse<Ingredient | { error: string }>> {
   const {
     name,
-    purchaseUnit,
     measurementUnit,
     unitsPerPurchase,
     pricePerPurchase,
     stockQuantity,
   }: {
     name: string;
-    purchaseUnit: string;
     measurementUnit: string;
     unitsPerPurchase?: number;
     pricePerPurchase: number;
     stockQuantity?: number;
   } = await req.json();
 
-  if (
-    !name ||
-    !purchaseUnit ||
-    !measurementUnit ||
-    typeof pricePerPurchase !== "number"
-  ) {
+  if (!name || !measurementUnit || typeof pricePerPurchase !== "number") {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
 
@@ -63,7 +56,6 @@ export async function PUT(
     where: { id: params.id },
     data: {
       name,
-      purchaseUnit,
       measurementUnit,
       unitsPerPurchase,
       pricePerPurchase,

@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -197,7 +198,6 @@ export default function POSPage() {
           ))}
         </div>
 
-        {/* Product Cards */}
         <div className="grid grid-cols-4 gap-3">
           {products
             .filter((p) =>
@@ -224,7 +224,6 @@ export default function POSPage() {
         </div>
       </div>
 
-      {/* Right: Order Panel */}
       <div className="col-span-4 space-y-4">
         <div className="border rounded p-3 space-y-3 bg-white">
           <h2 className="font-semibold text-lg">Current Order</h2>
@@ -238,7 +237,6 @@ export default function POSPage() {
                 </button>
               </div>
 
-              {/* Variant Select */}
               <select
                 value={item.variant.id}
                 onChange={(e) => updateVariant(index, e.target.value)}
@@ -251,7 +249,6 @@ export default function POSPage() {
                 ))}
               </select>
 
-              {/* Quantity */}
               <div className="flex items-center gap-2 mt-2">
                 <button onClick={() => updateItemQuantity(index, -1)}>
                   <Minus size={16} />
@@ -262,7 +259,6 @@ export default function POSPage() {
                 </button>
               </div>
 
-              {/* Addons */}
               <div className="mt-2">
                 <label className="text-sm">Addons:</label>
                 <select
@@ -277,7 +273,6 @@ export default function POSPage() {
                   ))}
                 </select>
 
-                {/* Added addons */}
                 <ul className="text-xs mt-1 space-y-1">
                   {item.addons.map((a) => (
                     <li key={a.addon.id} className="flex justify-between">
@@ -310,20 +305,46 @@ export default function POSPage() {
           </div>
         </div>
 
-        {/* Payment */}
-        <div className="flex space-x-10">
-          <div className="font-bold text-2xl">Payment: P{payment || "0"}</div>
-          <div className="font-bold text-2xl">
-            Change: ₱
-            {Math.max(0, parseFloat(payment || "0") - calculateTotal()).toFixed(
-              2
-            )}
+        <div className="flex gap-10 flex-col">
+          <div className="flex space-x-10">
+            <div className="font-bold text-2xl">Payment: P{payment || "0"}</div>
+            <div className="font-bold text-2xl">
+              Change: ₱
+              {Math.max(
+                0,
+                parseFloat(payment || "0") - calculateTotal()
+              ).toFixed(2)}
+            </div>
+          </div>
+          <div className="flex space-x-2 w-full">
+            <button
+              onClick={clearPayment}
+              disabled={orderItems.length === 0}
+              className={`p-4 rounded w-full ${
+                orderItems.length === 0
+                  ? "bg-red-100 text-gray-400"
+                  : "bg-red-200 active:bg-red-300"
+              }`}
+            >
+              Clear
+            </button>
+            <button
+              onClick={deleteDigit}
+              disabled={orderItems.length === 0}
+              className={`p-4 rounded w-full ${
+                orderItems.length === 0
+                  ? "bg-yellow-100 text-gray-400"
+                  : "bg-yellow-200 active:bg-yellow-300"
+              }`}
+            >
+              ←
+            </button>
           </div>
         </div>
 
         {/* Keypad */}
         <div className="grid grid-cols-3 gap-2">
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((n) => (
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => (
             <button
               key={n}
               onClick={() => handleDigit(n)}
@@ -337,28 +358,21 @@ export default function POSPage() {
               {n}
             </button>
           ))}
+
+          {/* Spacer to push "0" to the center column */}
+          <div></div>
           <button
-            onClick={clearPayment}
+            onClick={() => handleDigit("0")}
             disabled={orderItems.length === 0}
-            className={`p-4 rounded ${
+            className={`p-4 text-lg rounded col-span-1 ${
               orderItems.length === 0
-                ? "bg-red-100 text-gray-400"
-                : "bg-red-200 active:bg-red-300"
+                ? "bg-gray-100 text-gray-400"
+                : "bg-gray-200 active:bg-gray-300"
             }`}
           >
-            Clear
+            0
           </button>
-          <button
-            onClick={deleteDigit}
-            disabled={orderItems.length === 0}
-            className={`p-4 rounded ${
-              orderItems.length === 0
-                ? "bg-yellow-100 text-gray-400"
-                : "bg-yellow-200 active:bg-yellow-300"
-            }`}
-          >
-            ←
-          </button>
+          <div></div>
         </div>
 
         <button
@@ -380,7 +394,6 @@ export default function POSPage() {
         </button>
       </div>
 
-      {/* Review Modal */}
       <OrderConfirmationDialog
         isOpen={showDialog}
         onClose={() => setShowDialog(false)}

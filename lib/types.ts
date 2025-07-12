@@ -66,7 +66,6 @@ export type MaterialWithStock = Material & {
 // Ingredients
 export type IngredientInput = {
   name: string;
-  purchaseUnit: string;
   measurementUnit: string;
   unitsPerPurchase?: number;
   pricePerPurchase: number;

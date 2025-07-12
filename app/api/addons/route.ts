@@ -2,7 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { Addon } from "@prisma/client";
 
-// Type for request body
 type CreateAddonInput = {
   name: string;
   price: number;

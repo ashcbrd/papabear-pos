@@ -12,6 +12,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { useEffect, useState } from "react";
+import { format } from "date-fns";
 
 interface DashboardStats {
   all_time_earning: number;
@@ -91,9 +92,15 @@ export default function AdminDashboardPage() {
 
       {/* Time-based Insights */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard title="Busiest Day" value={stats.busiest_day} />
-        <StatCard title="Slowest Day" value={stats.least_day} />
-        <StatCard title="Top Hour" value={formatHour(stats.busiest_hour)} />
+        <StatCard
+          title="Busiest Day"
+          value={format(stats.busiest_day, "MMMM dd, yyyy")}
+        />
+        <StatCard
+          title="Slowest Day"
+          value={format(stats.least_day, "MMMM dd, yyyy")}
+        />
+        <StatCard title="Busiest Hour" value={formatHour(stats.busiest_hour)} />
         <StatCard title="Slowest Hour" value={formatHour(stats.least_hour)} />
       </div>
 

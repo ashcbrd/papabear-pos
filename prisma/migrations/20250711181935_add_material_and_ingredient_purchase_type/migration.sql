@@ -16,7 +16,6 @@ PRAGMA foreign_keys=OFF;
 CREATE TABLE "new_Ingredient" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
-    "purchaseUnit" TEXT NOT NULL,
     "measurementUnit" TEXT NOT NULL,
     "unitsPerPurchase" REAL,
     "pricePerPurchase" REAL NOT NULL,
