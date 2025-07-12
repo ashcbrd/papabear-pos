@@ -1,0 +1,138 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Product {
+  id         String      @id @default(uuid())
+  name       String
+  category   Category
+  variants   Variant[]
+  orderItems OrderItem[]
+  imageUrl   String?
+  createdAt  DateTime    @default(now())
+}
+
+model Variant {
+  id           String           @id @default(uuid())
+  name         String
+  price        Float
+  product      Product          @relation(fields: [productId], references: [id])
+  productId    String
+  orderItems   OrderItem[]
+  materials    VariantMaterial[]
+  ingredients  VariantIngredient[]
+
+  @@unique([name, productId])
+}
+
+model VariantIngredient {
+  id           String     @id @default(uuid())
+  variant      Variant    @relation(fields: [variantId], references: [id])
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+  quantityUsed Float
+  variantId    String
+  ingredientId String
+}
+
+model VariantMaterial {
+  id           String   @id @default(uuid())
+  variant      Variant  @relation(fields: [variantId], references: [id])
+  material     Material @relation(fields: [materialId], references: [id])
+  quantityUsed Float
+  variantId    String
+  materialId   String
+}
+
+enum Category {
+  InsideMeals
+  OutsideSnacks
+  InsideBeverages
+}
+
+model Addon {
+  id        String   @id @default(uuid())
+  name      String
+  price     Float
+  stock     Stock?
+  orderItemAddons OrderItemAddon[]
+}
+
+model Ingredient {
+  id                  String   @id @default(uuid())
+  name                String
+  purchaseUnit        String
+  measurementUnit     String
+  unitsPerPurchase    Float?
+  pricePerPurchase    Float
+  pricePerUnit        Float
+  stock               Stock?
+  createdAt           DateTime @default(now())
+  variants            VariantIngredient[]
+}
+
+model Material {
+  id               String   @id @default(uuid())
+  name             String
+  pricePerPiece    Float
+  isPackage        Boolean  @default(false)
+  packagePrice     Float?
+  unitsPerPackage  Int?
+  stock            Stock?
+  createdAt        DateTime @default(now())
+  variants         VariantMaterial[]
+}
+
+model Stock {
+  id           String     @id @default(uuid())
+  quantity     Float
+  addon        Addon?     @relation(fields: [addonId], references: [id])
+  ingredient   Ingredient?@relation(fields: [ingredientId], references: [id])
+  material     Material?  @relation(fields: [materialId], references: [id])
+  addonId      String?    @unique
+  ingredientId String?    @unique
+  materialId   String?    @unique
+}
+
+model Order {
+  id        String       @id @default(uuid())
+  items     OrderItem[]
+  total     Float
+  paid      Float
+  change    Float
+  createdAt DateTime     @default(now())
+  receipt   Receipt?
+}
+
+model OrderItem {
+  id        String    @id @default(uuid())
+  order     Order     @relation(fields: [orderId], references: [id])
+  orderId   String
+  product   Product   @relation(fields: [productId], references: [id])
+  productId String
+  variant   Variant   @relation(fields: [variantId], references: [id])
+  variantId String
+  quantity  Int
+  addons    OrderItemAddon[]
+}
+
+model OrderItemAddon {
+  id          String  @id @default(uuid())
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+  orderItemId String
+  addon       Addon   @relation(fields: [addonId], references: [id])
+  addonId     String
+  quantity    Int
+}
+
+model Receipt {
+  id        String   @id @default(uuid())
+  order     Order    @relation(fields: [orderId], references: [id])
+  orderId   String   @unique
+  content   Json
+  createdAt DateTime @default(now())
+}
