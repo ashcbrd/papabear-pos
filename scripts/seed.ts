@@ -1,8 +1,7 @@
-// scripts/seed.ts
 import { prisma } from "@/lib/prisma";
+import { Category } from "@prisma/client";
 
 const run = async () => {
-  // Step 1: Clean database
   await prisma.receipt.deleteMany();
   await prisma.orderItemAddon.deleteMany();
   await prisma.orderItem.deleteMany();
@@ -16,7 +15,29 @@ const run = async () => {
   await prisma.ingredient.deleteMany();
   await prisma.stock.deleteMany();
 
-  // Step 2: Seed data
+  const addonList = [
+    { name: "Sugar", price: 3 },
+    { name: "Espresso Shot", price: 10 },
+    { name: "Ice Cream Scoop", price: 8 },
+    { name: "Whipped Cream", price: 5 },
+    { name: "Caramel Drizzle", price: 4 },
+    { name: "Choco Chips", price: 6 },
+    { name: "Cheese", price: 7 },
+    { name: "Extra Hotdog", price: 9 },
+    { name: "Fried Egg", price: 6 },
+    { name: "Lettuce", price: 2 },
+  ];
+
+  for (const addon of addonList) {
+    await prisma.addon.create({
+      data: {
+        name: addon.name,
+        price: addon.price,
+        stock: { create: { quantity: 100 } },
+      },
+    });
+  }
+
   const materialNames = [
     "Plastic Cup",
     "Paper Wrapper",
@@ -54,17 +75,7 @@ const run = async () => {
     { name: "Iced Tea", category: "InsideBeverages" },
   ];
 
-  for (let i = 0; i < 10; i++) {
-    // Create Addon
-    await prisma.addon.create({
-      data: {
-        name: `Addon ${i + 1}`,
-        price: 5 + i,
-        stock: { create: { quantity: 100 } },
-      },
-    });
-
-    // Create Material
+  for (let i = 0; i < productList.length; i++) {
     const isPackage = i % 2 === 0;
     const unitsPerPackage = 10 + i;
     const packagePrice = 50 + i;
@@ -80,7 +91,6 @@ const run = async () => {
       },
     });
 
-    // Create Ingredient
     const unitsPerPurchase = 4 + i;
     const pricePerPurchase = 20 + i;
     const pricePerUnit = pricePerPurchase / unitsPerPurchase;
@@ -96,11 +106,10 @@ const run = async () => {
       },
     });
 
-    // Create Product and Variants
     const product = await prisma.product.create({
       data: {
         name: productList[i].name,
-        category: productList[i].category as any,
+        category: productList[i].category as Category,
         imageUrl: `/uploads/test${i + 1}.jpg`,
       },
     });
@@ -120,7 +129,6 @@ const run = async () => {
         },
       });
 
-      // Attach variant-specific ingredients & materials
       await prisma.variantIngredient.create({
         data: {
           variantId: variant.id,
@@ -128,6 +136,7 @@ const run = async () => {
           quantityUsed: 1 + (i % 3),
         },
       });
+
       await prisma.variantMaterial.create({
         data: {
           variantId: variant.id,
@@ -140,7 +149,6 @@ const run = async () => {
 
   console.log("✅ Seeded products, variants, materials, and ingredients");
 
-  // Step 3: Dummy Orders
   const allProducts = await prisma.product.findMany({
     include: { variants: true },
   });
@@ -149,7 +157,6 @@ const run = async () => {
   for (let i = 0; i < 5; i++) {
     const items = [];
     let total = 0;
-
     const numItems = Math.floor(Math.random() * 3) + 1;
 
     for (let j = 0; j < numItems; j++) {

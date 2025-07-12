@@ -184,11 +184,12 @@ export async function PUT(req: Request, context: { params: { id: string } }) {
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
-  const id = params.id;
+  const { id } = context.params;
 
   try {
+    // 🚫 Check if the product or its variants are used in any order
     const hasOrderItems = await prisma.orderItem.findFirst({
       where: {
         OR: [{ productId: id }, { variant: { productId: id } }],
@@ -202,6 +203,7 @@ export async function DELETE(
       );
     }
 
+    // 🧹 Clean up all variant-related data
     const variants = await prisma.variant.findMany({
       where: { productId: id },
       select: { id: true },
@@ -223,13 +225,16 @@ export async function DELETE(
       });
     }
 
-    await prisma.product.delete({ where: { id } });
+    // 🗑️ Delete the product
+    await prisma.product.delete({
+      where: { id },
+    });
 
     return NextResponse.json({ message: "Product deleted successfully" });
   } catch (error) {
     console.error("Error deleting product:", error);
     return NextResponse.json(
-      { message: "Failed to delete product", error },
+      { message: "Failed to delete product", error: String(error) },
       { status: 500 }
     );
   }
