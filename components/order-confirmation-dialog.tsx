@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import html2canvas from "html2canvas";
-import { X, Download, Printer } from "lucide-react";
+// import html2canvas from "html2canvas";
+import { X } from "lucide-react";
 
 type OrderConfirmationDialogProps = {
   isOpen: boolean;
@@ -29,30 +29,30 @@ export default function OrderConfirmationDialog({
     };
   }, [isOpen]);
 
-  const handleDownload = async () => {
-    if (!receiptRef.current) return;
-    const canvas = await html2canvas(receiptRef.current);
-    const dataURL = canvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.href = dataURL;
-    link.download = "receipt.png";
-    link.click();
-  };
+  // const handleDownload = async () => {
+  //   if (!receiptRef.current) return;
+  //   const canvas = await html2canvas(receiptRef.current);
+  //   const dataURL = canvas.toDataURL("image/png");
+  //   const link = document.createElement("a");
+  //   link.href = dataURL;
+  //   link.download = "receipt.png";
+  //   link.click();
+  // };
 
-  const handlePrint = () => {
-    if (!receiptRef.current) return;
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(
-        "<html><head><title>Receipt</title></head><body>"
-      );
-      printWindow.document.write(receiptRef.current.innerHTML);
-      printWindow.document.write("</body></html>");
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
-    }
-  };
+  // const handlePrint = () => {
+  //   if (!receiptRef.current) return;
+  //   const printWindow = window.open("", "_blank");
+  //   if (printWindow) {
+  //     printWindow.document.write(
+  //       "<html><head><title>Receipt</title></head><body>"
+  //     );
+  //     printWindow.document.write(receiptRef.current.innerHTML);
+  //     printWindow.document.write("</body></html>");
+  //     printWindow.document.close();
+  //     printWindow.focus();
+  //     printWindow.print();
+  //   }
+  // };
 
   if (!isOpen) return null;
 
@@ -78,7 +78,7 @@ export default function OrderConfirmationDialog({
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-6 flex justify-between gap-2">
+        {/* <div className="mt-6 flex justify-between gap-2">
           <button
             onClick={handlePrint}
             className="flex items-center gap-1 px-3 py-2 text-sm bg-gray-200 rounded hover:bg-gray-300"
@@ -100,7 +100,7 @@ export default function OrderConfirmationDialog({
               Close
             </button>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>,
     document.body

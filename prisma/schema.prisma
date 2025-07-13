@@ -106,6 +106,8 @@ model Order {
   change    Float
   createdAt DateTime     @default(now())
   receipt   Receipt?
+  orderType   OrderType  @default(DINE_IN)
+  orderStatus OrderStatus  @default(QUEUING)
 }
 
 model OrderItem {
@@ -135,4 +137,14 @@ model Receipt {
   orderId   String   @unique
   content   Json
   createdAt DateTime @default(now())
+}
+
+enum OrderType {
+  DINE_IN
+  TAKE_OUT
+}
+
+enum OrderStatus {
+  QUEUING
+  SERVED
 }

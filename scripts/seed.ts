@@ -199,6 +199,8 @@ const run = async () => {
         total,
         paid: total + 10,
         change: 10,
+        orderType: i % 2 === 0 ? "DINE_IN" : "TAKE_OUT",
+        orderStatus: "QUEUING",
         items: { create: items },
       },
       include: {
