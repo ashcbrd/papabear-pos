@@ -22,7 +22,7 @@ export default function CustomSelect<T extends string>({
   const selectedLabel = options.find((opt) => opt.value === value)?.label;
 
   return (
-    <div className={`relative w-full ${className}`}>
+    <div className={`relative w-max min-w-[200px] ${className}`}>
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}

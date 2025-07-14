@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MaterialInput, MaterialWithStock } from "@/lib/types";
-import { Pencil, Trash } from "lucide-react";
+import { Boxes, Pencil, Trash } from "lucide-react";
 
 export default function MaterialsAdminPage() {
   const [materials, setMaterials] = useState<MaterialWithStock[]>([]);
@@ -12,7 +12,6 @@ export default function MaterialsAdminPage() {
   const [unitsPerPackage, setUnitsPerPackage] = useState<number>(0);
   const [pricePerPiece, setPricePerPiece] = useState<number>(0);
   const [stockQuantity, setStockQuantity] = useState<number>(0);
-
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<
     Partial<MaterialInput & { stockQuantity?: number }>
@@ -55,7 +54,6 @@ export default function MaterialsAdminPage() {
     setUnitsPerPackage(0);
     setPricePerPiece(0);
     setStockQuantity(0);
-
     fetchMaterials();
   };
 
@@ -76,7 +74,7 @@ export default function MaterialsAdminPage() {
 
     const payload = {
       name: editForm.name ?? "",
-      isPackage: isPackage, // This must be sent
+      isPackage,
       packagePrice: isPackage ? packagePrice : undefined,
       unitsPerPackage: isPackage ? unitsPerPackage : undefined,
       pricePerPiece: !isPackage ? editForm.pricePerPiece : undefined,
@@ -96,15 +94,20 @@ export default function MaterialsAdminPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-xl font-bold">Materials</h1>
+      <div className="flex items-center gap-2">
+        <Boxes size={24} className="text-green-700" />
+        <h1 className="text-xl font-bold">Materials</h1>
+      </div>
 
-      <div className="space-y-2">
-        <label className="block text-sm">Material name</label>
-        <input
-          className="border p-2 w-full"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+      <div className="space-y-4 bg-white border border-zinc-300 p-4 rounded-md">
+        <div>
+          <label className="block text-sm mb-1">Material Name</label>
+          <input
+            className="border border-zinc-300 p-2 w-full rounded-md"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
 
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -117,76 +120,98 @@ export default function MaterialsAdminPage() {
 
         {isPackage ? (
           <>
-            <label className="block text-sm">Package Price</label>
-            <input
-              type="number"
-              className="border p-2 w-full"
-              value={packagePrice}
-              onChange={(e) => setPackagePrice(parseFloat(e.target.value))}
-            />
-
-            <label className="block text-sm">Units per Package</label>
-            <input
-              type="number"
-              className="border p-2 w-full"
-              value={unitsPerPackage}
-              onChange={(e) => setUnitsPerPackage(parseInt(e.target.value))}
-            />
-
+            <div>
+              <label className="block text-sm mb-1">Package Price</label>
+              <input
+                type="number"
+                className="border border-zinc-300 p-2 w-full rounded-md"
+                value={packagePrice}
+                onChange={(e) => setPackagePrice(parseFloat(e.target.value))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Units per Package</label>
+              <input
+                type="number"
+                className="border border-zinc-300 p-2 w-full rounded-md"
+                value={unitsPerPackage}
+                onChange={(e) => setUnitsPerPackage(parseInt(e.target.value))}
+              />
+            </div>
             <div className="text-sm text-gray-600">
               Auto price per piece: ₱{pricePerPiece.toFixed(2)}
             </div>
           </>
         ) : (
-          <>
-            <label className="block text-sm">Price per Piece</label>
+          <div>
+            <label className="block text-sm mb-1">Price per Piece</label>
             <input
               type="number"
-              className="border p-2 w-full"
+              className="border border-zinc-300 p-2 w-full rounded-md"
               value={pricePerPiece}
               onChange={(e) => setPricePerPiece(parseFloat(e.target.value))}
             />
-          </>
+          </div>
         )}
 
-        <label className="block text-sm">Initial Stock Quantity</label>
-        <input
-          type="number"
-          className="border p-2 w-full"
-          value={stockQuantity}
-          onChange={(e) => setStockQuantity(parseInt(e.target.value))}
-        />
+        <div>
+          <label className="block text-sm mb-1">Initial Stock Quantity</label>
+          <input
+            type="number"
+            className="border border-zinc-300 p-2 w-full rounded-md"
+            value={stockQuantity}
+            onChange={(e) => setStockQuantity(parseInt(e.target.value))}
+          />
+        </div>
 
-        <button
-          onClick={createMaterial}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          Create Material
-        </button>
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => {
+              setName("");
+              setIsPackage(false);
+              setPackagePrice(0);
+              setUnitsPerPackage(0);
+              setPricePerPiece(0);
+              setStockQuantity(0);
+            }}
+            className="bg-zinc-200 text-zinc-700 px-4 py-2 rounded-md hover:bg-zinc-300 transition"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={createMaterial}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
+          >
+            Create Material
+          </button>
+        </div>
       </div>
 
-      <table className="w-full mt-6 border text-sm">
+      <table className="w-full mt-6 border border-zinc-300 text-sm bg-white rounded-md overflow-hidden">
         <thead>
-          <tr className="bg-gray-100">
-            <th className="p-2 text-left">Name</th>
-            <th className="p-2 text-left">Price/Piece</th>
-            <th className="p-2 text-left">Stock</th>
-            <th className="p-2 text-left">Actions</th>
+          <tr className="text-left ">
+            <th className="p-2 text-left border border-zinc-300">Name</th>
+            <th className="p-2 text-left border border-zinc-300">
+              Price/Piece
+            </th>
+            <th className="p-2 text-left border border-zinc-300">Stock</th>
+            <th className="p-2 text-left border border-zinc-300">Actions</th>
           </tr>
         </thead>
         <tbody>
           {materials.map((m) => (
-            <tr key={m.id} className="border-t">
+            <tr key={m.id} className="border-t border-zinc-300">
               {editingId === m.id ? (
                 <>
-                  <td className="p-2">
+                  <td className="p-2 border border-zinc-300">
                     <input
                       value={editForm.name ?? m.name}
                       onChange={(e) => handleEditChange("name", e.target.value)}
-                      className="border p-1 w-full"
+                      className="border border-zinc-300 p-1 w-full rounded-md"
                     />
                   </td>
-                  <td className="p-2">
+                  <td className="p-2 border border-zinc-300">
                     <input
                       type="number"
                       value={editForm.pricePerPiece ?? m.pricePerPiece}
@@ -196,10 +221,10 @@ export default function MaterialsAdminPage() {
                           parseFloat(e.target.value)
                         )
                       }
-                      className="border p-1 w-full"
+                      className="border border-zinc-300 p-1 w-full rounded-md"
                     />
                   </td>
-                  <td className="p-2">
+                  <td className="p-2 border border-zinc-300">
                     <input
                       type="number"
                       value={editForm.stockQuantity ?? m.stock?.quantity ?? 0}
@@ -209,10 +234,10 @@ export default function MaterialsAdminPage() {
                           parseInt(e.target.value)
                         )
                       }
-                      className="border p-1 w-full"
+                      className="border border-zinc-300 p-1 w-full rounded-md"
                     />
                   </td>
-                  <td className="p-2 space-x-2">
+                  <td className="p-2 space-x-2 border border-zinc-300">
                     <button
                       onClick={saveEdit}
                       className="text-green-600 hover:underline"
@@ -229,10 +254,14 @@ export default function MaterialsAdminPage() {
                 </>
               ) : (
                 <>
-                  <td className="p-2">{m.name}</td>
-                  <td className="p-2">₱{m.pricePerPiece.toFixed(2)}</td>
-                  <td className="p-2">{m.stock?.quantity ?? 0}</td>
-                  <td className="p-2 flex gap-2">
+                  <td className="p-2 border border-zinc-300">{m.name}</td>
+                  <td className="p-2 border border-zinc-300">
+                    ₱{m.pricePerPiece.toFixed(2)}
+                  </td>
+                  <td className="p-2 border border-zinc-300">
+                    {m.stock?.quantity ?? 0}
+                  </td>
+                  <td className="p-2 flex gap-2 border border-zinc-300">
                     <button
                       onClick={() => {
                         setEditingId(m.id);
@@ -244,7 +273,7 @@ export default function MaterialsAdminPage() {
                       }}
                       className="text-blue-600 hover:underline"
                     >
-                      <Pencil size={16} className="text-blue-600" />
+                      <Pencil size={16} />
                     </button>
                     <button
                       onClick={() => handleDelete(m.id)}

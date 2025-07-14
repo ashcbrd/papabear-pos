@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AddonInput, AddonWithStock } from "@/lib/types";
-import { Pencil, Trash } from "lucide-react";
+import { Pencil, Trash, UtensilsCrossed } from "lucide-react";
 
 export default function AddonsAdminPage() {
   const [addons, setAddons] = useState<AddonWithStock[]>([]);
@@ -62,63 +62,75 @@ export default function AddonsAdminPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-xl font-bold">Addons</h1>
-
-      <div className="space-y-3">
-        <div>
-          <label className="block text-sm mb-1">Addon Name</label>
-          <input
-            className="border p-2 w-full"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Price</label>
-          <input
-            type="number"
-            className="border p-2 w-full"
-            value={price}
-            onChange={(e) => setPrice(parseFloat(e.target.value))}
-          />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Stock Quantity</label>
-          <input
-            type="number"
-            className="border p-2 w-full"
-            value={stockQuantity}
-            onChange={(e) => setStockQuantity(parseInt(e.target.value))}
-          />
-        </div>
-
-        <button
-          onClick={createAddon}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          Create Addon
-        </button>
+      <div className="flex items-center gap-2">
+        <UtensilsCrossed size={24} className="text-green-700" />
+        <h1 className="text-xl font-bold">Add-ons</h1>
       </div>
 
-      <table className="w-full mt-6 border text-sm">
+      <div className="space-y-2 border border-zinc-300 rounded-md p-4 bg-white">
+        <label className="block text-sm">Addon Name</label>
+        <input
+          className="border border-zinc-300 rounded-md p-2 w-full"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+
+        <label className="block text-sm">Price</label>
+        <input
+          type="number"
+          className="border border-zinc-300 rounded-md p-2 w-full"
+          value={price}
+          onChange={(e) => setPrice(parseFloat(e.target.value))}
+        />
+
+        <label className="block text-sm">Stock Quantity</label>
+        <input
+          type="number"
+          className="border border-zinc-300 rounded-md p-2 w-full"
+          value={stockQuantity}
+          onChange={(e) => setStockQuantity(parseInt(e.target.value))}
+        />
+
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => {
+              setName("");
+              setPrice(0);
+              setStockQuantity(0);
+            }}
+            className="bg-zinc-200 text-zinc-700 px-4 py-2 rounded-md hover:bg-zinc-300 transition"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={createAddon}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
+          >
+            Create Addon
+          </button>
+        </div>
+      </div>
+
+      <table className="w-full mt-6 border border-zinc-300 text-sm bg-white rounded-md overflow-hidden">
         <thead>
-          <tr className="bg-gray-100">
-            <th className="p-2 text-left">Name</th>
-            <th className="p-2 text-left">Price</th>
-            <th className="p-2 text-left">Stock</th>
-            <th className="p-2 text-left">Actions</th>
+          <tr className="text-left">
+            <th className="p-2">Name</th>
+            <th className="p-2">Price</th>
+            <th className="p-2">Stock</th>
+            <th className="p-2">Actions</th>
           </tr>
         </thead>
         <tbody>
           {addons.map((addon) => (
-            <tr key={addon.id} className="border-t">
+            <tr key={addon.id} className="border-t border-zinc-200 align-top">
               {editingId === addon.id ? (
                 <>
                   <td className="p-2">
                     <input
                       value={editForm.name ?? addon.name}
                       onChange={(e) => handleEditChange("name", e.target.value)}
-                      className="border p-1 w-full"
+                      className="border border-zinc-300 p-1 w-full rounded-md"
                     />
                   </td>
                   <td className="p-2">
@@ -128,7 +140,7 @@ export default function AddonsAdminPage() {
                       onChange={(e) =>
                         handleEditChange("price", parseFloat(e.target.value))
                       }
-                      className="border p-1 w-full"
+                      className="border border-zinc-300 p-1 w-full rounded-md"
                     />
                   </td>
                   <td className="p-2">
@@ -143,7 +155,7 @@ export default function AddonsAdminPage() {
                           parseInt(e.target.value)
                         )
                       }
-                      className="border p-1 w-full"
+                      className="border border-zinc-300 p-1 w-full rounded-md"
                     />
                   </td>
                   <td className="p-2 space-x-2">

@@ -15,7 +15,6 @@ import OrderConfirmationDialog from "@/components/order-confirmation-dialog";
 import CustomSelect from "@/components/custom-select";
 import { useToast } from "@/components/toast-context";
 import { LayoutGrid, Utensils, Coffee, Candy } from "lucide-react";
-import Logo from "@/components/logo";
 
 type ProductWithVariants = ProductType & { variants: Variant[] };
 

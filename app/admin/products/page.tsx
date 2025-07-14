@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Category, Ingredient, Material } from "@prisma/client";
-import { Pencil, Trash } from "lucide-react";
+import { Pencil, Trash, PlusCircle, XCircle, Package } from "lucide-react";
+import CustomSelect from "@/components/custom-select";
 
 type VariantName = "general" | "small" | "medium" | "large" | "16oz" | "22oz";
 const allVariantOptions: VariantName[] = [
@@ -68,17 +69,15 @@ export default function ProductsAdminPage() {
 
   const handleSave = async () => {
     const payload = { name, category, variants };
-    const method = editingProductId ? "PUT" : "POST";
     const url = editingProductId
       ? `/api/products/${editingProductId}`
       : "/api/products";
-
+    const method = editingProductId ? "PUT" : "POST";
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
     if (res.ok) {
       resetForm();
       loadAll();
@@ -117,24 +116,31 @@ export default function ProductsAdminPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-xl font-bold">Products</h1>
-      <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Package size={24} className="text-green-700" />
+        <h1 className="text-xl font-bold">Products</h1>
+      </div>
+
+      <div className="bg-white border border-zinc-300 rounded-md p-4 space-y-4">
         <input
           placeholder="Product Name"
-          className="border p-2 w-full"
+          className="border border-zinc-300 p-2 w-full rounded-md"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
 
-        <select
-          className="border p-2 w-full"
-          value={category}
-          onChange={(e) => setCategory(e.target.value as Category)}
-        >
-          <option value="InsideMeals">Inside Meals</option>
-          <option value="OutsideSnacks">Outside Snacks</option>
-          <option value="InsideBeverages">Inside Beverages</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <CustomSelect<Category>
+            value={category}
+            options={[
+              { label: "Inside Meals", value: "InsideMeals" },
+              { label: "Outside Snacks", value: "OutsideSnacks" },
+              { label: "Inside Beverages", value: "InsideBeverages" },
+            ]}
+            onChange={setCategory}
+            className="flex-1"
+          />
+        </div>
 
         {variants.map((variant, idx) => (
           <VariantEditor
@@ -149,31 +155,35 @@ export default function ProductsAdminPage() {
         ))}
 
         <button
-          className="text-sm text-blue-600 underline"
+          className="flex items-center gap-1 text-green-700 hover:underline"
           disabled={variants.length >= allVariantOptions.length}
-          onClick={() =>
+          onClick={() => {
+            const name = allVariantOptions.find(
+              (opt) => !variants.some((v) => v.name === opt)
+            )!;
             setVariants([
               ...variants,
-              {
-                name: allVariantOptions.find(
-                  (opt) => !variants.some((v) => v.name === opt)
-                )!,
-                price: 0,
-                materials: [],
-                ingredients: [],
-              },
-            ])
-          }
+              { name, price: 0, materials: [], ingredients: [] },
+            ]);
+          }}
         >
-          + Add Variant
+          <PlusCircle size={16} /> Add Variant
         </button>
 
-        <button
-          onClick={handleSave}
-          className="mt-4 bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          {editingProductId ? "Update Product" : "Save Product"}
-        </button>
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={resetForm}
+            className="bg-zinc-200 text-zinc-700 px-4 py-2 rounded-md hover:bg-zinc-300"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
+          >
+            {editingProductId ? "Update Product" : "Save Product"}
+          </button>
+        </div>
       </div>
 
       <ProductTable
@@ -206,47 +216,46 @@ function VariantEditor({
     setVariants(variants.map((x, i) => (i === idx ? v : x)));
 
   return (
-    <div key={idx} className="border p-4 mt-4 rounded bg-gray-50">
-      <div className="flex gap-2">
-        <select
+    <div className="border border-zinc-300 rounded-md p-4 bg-gray-50 space-y-4">
+      <div className="flex items-center gap-2">
+        <CustomSelect<VariantName>
           value={variant.name}
-          onChange={(e) =>
-            update({ ...variant, name: e.target.value as VariantName })
-          }
-          className="border p-1"
-        >
-          {allVariantOptions
+          options={allVariantOptions
             .filter(
               (opt) =>
                 opt === variant.name || !variants.some((v) => v.name === opt)
             )
-            .map((opt) => (
-              <option key={opt}>{opt}</option>
-            ))}
-        </select>
+            .map((opt) => ({ label: opt, value: opt }))}
+          onChange={(val) => update({ ...variant, name: val })}
+          className="w-36"
+        />
 
         <input
           type="number"
-          className="border p-1 w-24"
+          className="border border-zinc-300 p-1 w-24 rounded-md"
           value={variant.price}
           onChange={(e) =>
             update({ ...variant, price: parseFloat(e.target.value) })
           }
         />
+        <button
+          onClick={() => setVariants(variants.filter((_, i) => i !== idx))}
+        >
+          <XCircle size={20} className="text-red-600" />
+        </button>
       </div>
 
       <NestedSelectors
         title="Materials"
         items={variant.materials}
         all={materials}
-        onChange={(materials) => update({ ...variant, materials })}
+        onChange={(items) => update({ ...variant, materials: items })}
       />
-
       <NestedSelectors
         title="Ingredients"
         items={variant.ingredients}
         all={ingredients}
-        onChange={(ingredients) => update({ ...variant, ingredients })}
+        onChange={(items) => update({ ...variant, ingredients: items })}
       />
     </div>
   );
@@ -264,34 +273,26 @@ function NestedSelectors<T extends { id: string; name: string }>({
   onChange: (items: { id: string; quantity: number }[]) => void;
 }) {
   return (
-    <div className="mt-4">
+    <div className="space-y-2">
       <h3 className="font-medium">{title}</h3>
-      <select
-        className="border p-2 w-full mt-1"
-        onChange={(e) => {
-          const id = e.target.value;
-          if (!id) return;
-          onChange([...items, { id, quantity: 1 }]);
-        }}
-      >
-        <option value="">+ Add {title.slice(0, -1)}</option>
-        {all
+      <CustomSelect<string>
+        value=""
+        options={all
           .filter((x) => !items.some((it) => it.id === x.id))
-          .map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-      </select>
+          .map((x) => ({ label: x.name, value: x.id }))}
+        onChange={(id) => onChange([...items, { id, quantity: 1 }])}
+        placeholder={`+ Add ${title.slice(0, -1)}`}
+        className="w-full"
+      />
 
       {items.map((it, i) => {
-        const obj = all.find((x) => x.id === it.id);
+        const found = all.find((x) => x.id === it.id);
         return (
-          <div key={it.id} className="flex gap-2 items-center mt-1">
-            <span className="w-32 text-sm">{obj?.name || "Unknown"}</span>
+          <div key={it.id} className="flex items-center gap-2">
+            <span className="w-32 text-sm">{found?.name || "Unknown"}</span>
             <input
               type="number"
-              className="border p-1 w-20"
+              className="border border-zinc-300 p-1 w-20 rounded-md"
               value={it.quantity}
               onChange={(e) => {
                 const arr = [...items];
@@ -299,11 +300,8 @@ function NestedSelectors<T extends { id: string; name: string }>({
                 onChange(arr);
               }}
             />
-            <button
-              className="text-red-500 text-sm"
-              onClick={() => onChange(items.filter((_, j) => j !== i))}
-            >
-              Remove
+            <button className="text-red-600">
+              <XCircle size={16} />
             </button>
           </div>
         );
@@ -326,23 +324,29 @@ function ProductTable({
   onDelete: (id: string) => void;
 }) {
   return (
-    <table className="w-full mt-8 border text-sm">
+    <table className="w-full mt-6 border border-zinc-300 text-sm bg-white rounded-md overflow-hidden">
       <thead>
-        <tr className="bg-gray-100">
-          <th className="p-2 text-left">Name</th>
-          <th className="p-2 text-left">Category</th>
-          <th className="p-2 text-left">Variants</th>
-          <th className="p-2 text-left">Actions</th>
+        <tr className="text-left ">
+          <th className="p-2 border border-zinc-300">Name</th>
+          <th className="p-2 border border-zinc-300">Category</th>
+          <th className="p-2 border border-zinc-300">Variants</th>
+          <th className="p-2 border border-zinc-300">Actions</th>
         </tr>
       </thead>
       <tbody>
         {products.map((p) => (
-          <tr key={p.id} className="border-t align-top">
-            <td className="p-2">{p.name}</td>
-            <td className="p-2">{p.category}</td>
-            <td className="p-2">
-              {p.variants.map((v) => (
-                <div key={v.id} className="mb-2">
+          <tr key={p.id} className="">
+            <td className="p-2 border border-zinc-300">{p.name}</td>
+            <td className="p-2 border border-zinc-300">{p.category}</td>
+            <td className="p-2 border border-zinc-300">
+              {p.variants.map((v, i) => (
+                <div
+                  key={v.id}
+                  className={`${
+                    i + 1 !== p.variants.length &&
+                    "border-b pb-2 border-zinc-200"
+                  } mb-2`}
+                >
                   <strong>{v.name}</strong> - ₱{v.price.toFixed(2)}
                   <div className="text-xs text-gray-600">Materials:</div>
                   {v.materials.map((m, i) => (
@@ -363,7 +367,7 @@ function ProductTable({
                 </div>
               ))}
             </td>
-            <td className="p-2 space-x-2">
+            <td className="p-2 border border-zinc-300 space-x-2">
               <button className="text-blue-600" onClick={() => onEdit(p)}>
                 <Pencil size={16} />
               </button>

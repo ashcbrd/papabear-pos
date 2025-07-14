@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { IngredientInput, IngredientWithStock } from "@/lib/types";
-import { Pencil, Trash } from "lucide-react";
+import { Pencil, Soup, Trash } from "lucide-react";
 
 const measurementUnits = [
   "kg",
@@ -30,12 +30,6 @@ export default function IngredientsAdminPage() {
     Partial<IngredientInput & { pricePerUnit: number }>
   >({});
 
-  const fetchIngredients = async () => {
-    const res = await fetch("/api/ingredients");
-    const data = await res.json();
-    setIngredients(data);
-  };
-
   useEffect(() => {
     fetchIngredients();
   }, []);
@@ -43,10 +37,13 @@ export default function IngredientsAdminPage() {
   useEffect(() => {
     if (unitsPerPurchase > 0) {
       setPricePerUnit(pricePerPurchase / unitsPerPurchase);
-    } else {
-      setPricePerUnit(pricePerPurchase);
     }
   }, [pricePerPurchase, unitsPerPurchase]);
+
+  const fetchIngredients = async () => {
+    const res = await fetch("/api/ingredients");
+    setIngredients(await res.json());
+  };
 
   const createIngredient = async () => {
     const payload: IngredientInput = {
@@ -69,14 +66,11 @@ export default function IngredientsAdminPage() {
     setPricePerPurchase(0);
     setPricePerUnit(0);
     setStockQuantity(0);
-
     fetchIngredients();
   };
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/ingredients/${id}`, {
-      method: "DELETE",
-    });
+    await fetch(`/api/ingredients/${id}`, { method: "DELETE" });
     fetchIngredients();
   };
 
@@ -109,20 +103,22 @@ export default function IngredientsAdminPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-xl font-bold">Ingredients</h1>
-
-      {/* Create Ingredient Form */}
-      <div className="space-y-2">
+      {" "}
+      <div className="flex items-center gap-2">
+        <Soup size={24} className="text-green-700" />
+        <h1 className="text-xl font-bold">Ingredients</h1>
+      </div>
+      <div className="space-y-2 border border-zinc-300 rounded-md p-4 bg-white">
         <label className="block text-sm">Ingredient Name</label>
         <input
-          className="border p-2 w-full"
+          className="border border-zinc-300 rounded-md p-2 w-full"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
 
         <label className="block text-sm">Measurement Unit</label>
         <select
-          className="border p-2 w-full"
+          className="border border-zinc-300 rounded-md p-2 w-full"
           value={measurementUnit}
           onChange={(e) => setMeasurementUnit(e.target.value)}
         >
@@ -136,7 +132,7 @@ export default function IngredientsAdminPage() {
         <label className="block text-sm">Units per Purchase</label>
         <input
           type="number"
-          className="border p-2 w-full"
+          className="border border-zinc-300 rounded-md p-2 w-full"
           value={unitsPerPurchase}
           onChange={(e) => setUnitsPerPurchase(parseFloat(e.target.value))}
         />
@@ -144,103 +140,109 @@ export default function IngredientsAdminPage() {
         <label className="block text-sm">Price per Purchase</label>
         <input
           type="number"
-          className="border p-2 w-full"
+          className="border border-zinc-300 rounded-md p-2 w-full"
           value={pricePerPurchase}
           onChange={(e) => setPricePerPurchase(parseFloat(e.target.value))}
         />
 
         <div className="text-sm text-gray-600">
-          Price per {measurementUnit || "unit"}: ₱{pricePerUnit.toFixed(2)}
+          ₱{pricePerUnit.toFixed(2)} per {measurementUnit}
         </div>
 
         <label className="block text-sm">Initial Stock Quantity</label>
         <input
           type="number"
-          className="border p-2 w-full"
+          className="border border-zinc-300 rounded-md p-2 w-full"
           value={stockQuantity}
           onChange={(e) => setStockQuantity(parseInt(e.target.value))}
         />
 
-        <button
-          onClick={createIngredient}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          Create Ingredient
-        </button>
-      </div>
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => {
+              setName("");
+              setMeasurementUnit("piece");
+              setUnitsPerPurchase(1);
+              setPricePerPurchase(0);
+              setPricePerUnit(0);
+              setStockQuantity(0);
+            }}
+            className="bg-zinc-200 text-zinc-700 px-4 py-2 rounded-md hover:bg-zinc-300 transition"
+          >
+            Cancel
+          </button>
 
-      {/* Ingredient Table */}
-      <table className="w-full mt-6 border text-sm">
+          <button
+            onClick={createIngredient}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
+          >
+            Create Ingredient
+          </button>
+        </div>
+      </div>
+      <table className="w-full mt-6 border border-zinc-300 text-sm bg-white rounded-md overflow-hidden">
         <thead>
-          <tr className="bg-gray-100">
-            <th className="p-2 text-left">Name</th>
-            <th className="p-2 text-left">Unit</th>
-            <th className="p-2 text-left">Price/Unit</th>
-            <th className="p-2 text-left">Stock</th>
-            <th className="p-2 text-left">Actions</th>
+          <tr className="text-left">
+            <th className="p-2">Name</th>
+            <th className="p-2">Unit</th>
+            <th className="p-2">Price/Unit</th>
+            <th className="p-2">Stock</th>
+            <th className="p-2">Actions</th>
           </tr>
         </thead>
         <tbody>
           {ingredients.map((i) => (
-            <tr key={i.id} className="border-t">
+            <tr key={i.id} className="border-t border-zinc-200 align-top">
               {editingId === i.id ? (
                 <>
                   <td className="p-2">
                     <input
                       value={editForm.name ?? i.name}
                       onChange={(e) => handleEditChange("name", e.target.value)}
-                      className="border p-1 w-full"
+                      className="border border-zinc-300 p-1 w-full rounded-md"
                     />
                   </td>
                   <td className="p-2">
                     <select
-                      className="border p-1 w-full"
                       value={editForm.measurementUnit ?? i.measurementUnit}
                       onChange={(e) =>
                         handleEditChange("measurementUnit", e.target.value)
                       }
+                      className="border border-zinc-300 p-1 w-full rounded-md"
                     >
                       {measurementUnits.map((unit) => (
-                        <option key={unit} value={unit}>
-                          {unit}
-                        </option>
+                        <option key={unit}>{unit}</option>
                       ))}
                     </select>
                   </td>
                   <td className="p-2">
-                    <div className="space-y-1">
-                      <input
-                        type="number"
-                        placeholder="Price per purchase"
-                        value={
-                          editForm.pricePerPurchase ?? i.pricePerPurchase ?? 0
-                        }
-                        onChange={(e) =>
-                          handleEditChange(
-                            "pricePerPurchase",
-                            parseFloat(e.target.value)
-                          )
-                        }
-                        className="border p-1 w-full"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Units per purchase"
-                        value={
-                          editForm.unitsPerPurchase ?? i.unitsPerPurchase ?? 1
-                        }
-                        onChange={(e) =>
-                          handleEditChange(
-                            "unitsPerPurchase",
-                            parseFloat(e.target.value)
-                          )
-                        }
-                        className="border p-1 w-full"
-                      />
-                      <div className="text-xs text-gray-500">
-                        ₱{(editForm.pricePerUnit ?? i.pricePerUnit).toFixed(2)}{" "}
-                        per unit
-                      </div>
+                    <input
+                      type="number"
+                      value={editForm.pricePerPurchase ?? i.pricePerPurchase}
+                      onChange={(e) =>
+                        handleEditChange(
+                          "pricePerPurchase",
+                          parseFloat(e.target.value)
+                        )
+                      }
+                      className="border border-zinc-300 p-1 w-full rounded-md mb-1"
+                    />
+                    <input
+                      type="number"
+                      value={
+                        editForm.unitsPerPurchase ?? i.unitsPerPurchase ?? 0
+                      }
+                      onChange={(e) =>
+                        handleEditChange(
+                          "unitsPerPurchase",
+                          parseFloat(e.target.value)
+                        )
+                      }
+                      className="border border-zinc-300 p-1 w-full rounded-md"
+                    />
+                    <div className="text-xs text-gray-500 mt-1">
+                      ₱{(editForm.pricePerUnit ?? i.pricePerUnit).toFixed(2)}{" "}
+                      per unit
                     </div>
                   </td>
                   <td className="p-2">
@@ -253,10 +255,10 @@ export default function IngredientsAdminPage() {
                           parseInt(e.target.value)
                         )
                       }
-                      className="border p-1 w-full"
+                      className="border border-zinc-300 p-1 w-full rounded-md"
                     />
                   </td>
-                  <td className="p-2 space-x-1">
+                  <td className="p-2 space-x-2">
                     <button
                       onClick={saveEdit}
                       className="text-green-600 hover:underline"
@@ -277,28 +279,24 @@ export default function IngredientsAdminPage() {
                   <td className="p-2">{i.measurementUnit}</td>
                   <td className="p-2">₱{i.pricePerUnit.toFixed(2)}</td>
                   <td className="p-2">{i.stock?.quantity ?? 0}</td>
-                  <td className="p-2 flex gap-x-2">
+                  <td className="p-2 flex gap-2">
                     <button
                       onClick={() => {
                         setEditingId(i.id);
                         setEditForm({
                           name: i.name,
                           measurementUnit: i.measurementUnit,
-                          unitsPerPurchase: i.unitsPerPurchase ?? 1,
+                          unitsPerPurchase: i.unitsPerPurchase ?? undefined,
                           pricePerPurchase: i.pricePerPurchase,
                           pricePerUnit: i.pricePerUnit,
                           stockQuantity: i.stock?.quantity ?? 0,
                         });
                       }}
-                      className="text-blue-600 hover:underline"
                     >
                       <Pencil size={16} className="text-blue-600" />
                     </button>
-                    <button
-                      onClick={() => handleDelete(i.id)}
-                      className="text-red-600 hover:underline"
-                    >
-                      <Trash size={16} />
+                    <button onClick={() => handleDelete(i.id)}>
+                      <Trash size={16} className="text-red-600" />
                     </button>
                   </td>
                 </>
