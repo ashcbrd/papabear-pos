@@ -14,7 +14,14 @@ import { Plus, Minus, Trash } from "lucide-react";
 import OrderConfirmationDialog from "@/components/order-confirmation-dialog";
 import CustomSelect from "@/components/custom-select";
 import { useToast } from "@/components/toast-context";
-import { LayoutGrid, Utensils, Coffee, Candy } from "lucide-react";
+import {
+  LayoutGrid,
+  Utensils,
+  Coffee,
+  Candy,
+  ChevronLeft,
+  X,
+} from "lucide-react";
 
 type ProductWithVariants = ProductType & { variants: Variant[] };
 
@@ -49,7 +56,7 @@ export default function POSPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [payment, setPayment] = useState<string>("");
   const [showDialog, setShowDialog] = useState(false);
-  const [orderType, setOrderType] = useState<OrderType>("DINE_IN");
+  const [orderType, setOrderType] = useState("");
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -59,6 +66,8 @@ export default function POSPage() {
     "InsideBeverages",
     "OutsideSnacks",
   ];
+
+  const [isOrderPanelVisible, setIsOrderPanelVisible] = useState(false);
 
   const { showToast } = useToast();
 
@@ -228,8 +237,14 @@ export default function POSPage() {
       setShowDialog(false);
       setEditingOrderId(null);
       fetchOrders();
+
+      setIsOrderPanelVisible(false);
       showToast(editingOrderId ? "Order updated." : "Order placed.", "success");
     }
+
+    setTimeout(() => {
+      setOrderType("");
+    }, 2000);
   };
 
   const handleServe = async (id: string) => {
@@ -323,9 +338,11 @@ export default function POSPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [orderItems, payment, isPaymentSufficient, deleteDigit]);
 
-  const isOrderPanelVisible = () => {
-    return orderItems.length > 0;
-  };
+  useEffect(() => {
+    if (orderItems.length > 0) {
+      setIsOrderPanelVisible(true);
+    }
+  }, [orderItems]);
 
   const formatOrderType = (type: OrderType) => {
     switch (type) {
@@ -339,273 +356,298 @@ export default function POSPage() {
   };
 
   return (
-    <div className="p-4 flex gap-4 relative">
-      <div
-        className={`
+    <>
+      {orderType ? (
+        <div className="p-4 flex gap-4 relative">
+          <button
+            onClick={() => setIsOrderPanelVisible(true)}
+            className="absolute top-10 right-0 py-4 px-6 shadow-md rounded-l-md border border-zinc-300 bg-red-500"
+          >
+            <ChevronLeft color="white" />
+          </button>
+          <div
+            className={`
     flex flex-col w-full overflow-x-auto gap-y-10
     transition-all duration-300 ease-in-out
-    ${isOrderPanelVisible() ? "mr-[500px]" : "mr-0"}
-  `}
-      >
-        <div className="col-span-12 border rounded-md border-zinc-300">
-          <h2 className="text-xl font-semibold p-3 border-b border-zinc-300">
-            Queuing Orders
-          </h2>
-          <div className="flex gap-4 overflow-x-auto pb-2 p-3 bg-zinc-100 min-h-[160px]">
-            {orders.length > 0 ? (
-              orders.map((order) => (
-                <div
-                  key={order.id}
-                  className="border border-zinc-300 rounded-md w-60 bg-white h-max"
-                >
-                  <div className="mb-1 px-3 py-1 border-b border-zinc-300 flex items-center justify-between">
-                    #{order.id.slice(0, 6)}{" "}
-                    <div className="text-xs text-zinc-500">
-                      {formatOrderType(order.orderType)}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-10 p-3">
-                    <div className="font-medium flex flex-col gap-4">
-                      {order.items.map((item) => (
-                        <div key={item.variant.id}>
-                          {item.product.name} ({item.variant.name}) x
-                          {item.quantity}
-                          {item.addons.length > 0 && (
-                            <ul className="text-xs mt-1 font-normal flex gap-1 flex-wrap">
-                              {item.addons.map((a) => (
-                                <li
-                                  key={a.addon.id}
-                                  className="bg-zinc-200 w-max px-2 py-1 rounded-md"
-                                >
-                                  {a.addon.name} x{a.quantity}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex justify-between gap-1">
-                      <button
-                        onClick={() => handleServe(order.id)}
-                        className="border border-zinc-200 text-white w-full bg-green-800 px-6 py-2 rounded-lg font-semibold text-lg"
-                      >
-                        Serve
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="w-full flex flex-col items-center justify-center text-center text-zinc-500 py-10 mx-auto">
-                <p className="text-lg font-medium">No queuing orders</p>
-                <p className="text-sm text-zinc-400">
-                  Orders will appear here once added.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Product List */}
-        <div className="col-span-8 space-y-4">
-          <div className="flex flex-col mb-4 w-max">
-            {/* Category Buttons */}
-            <div className="flex gap-2 p-1 rounded-xl border border-zinc-300 bg-gray-100 mb-4">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat as Category)}
-                  className={`py-2 px-4 flex items-center gap-2 rounded-lg tracking-wide ${
-                    selectedCategory === cat
-                      ? "bg-white border border-zinc-300"
-                      : "bg-none"
-                  }`}
-                >
-                  {categoryIcons[cat]}
-                  {cat === "All"
-                    ? "All"
-                    : cat.replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase()}
-                </button>
-              ))}
+  `}
+          >
+            <div className="col-span-12 border rounded-md border-zinc-300">
+              <h2 className="text-xl font-semibold p-3 border-b border-zinc-300">
+                Queuing Orders
+              </h2>
+              <div className="flex gap-4 overflow-x-auto pb-2 p-3 bg-zinc-100 min-h-[160px]">
+                {orders.length > 0 ? (
+                  orders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="border border-zinc-300 rounded-md w-60 bg-white h-max"
+                    >
+                      <div className="mb-1 px-3 py-1 border-b border-zinc-300 flex items-center justify-between">
+                        #{order.id.slice(0, 6)}{" "}
+                        <div className="text-xs text-zinc-500">
+                          {formatOrderType(order.orderType)}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-10 p-3">
+                        <div className="font-medium flex flex-col gap-4">
+                          {order.items.map((item) => (
+                            <div key={item.variant.id}>
+                              {item.product.name} ({item.variant.name}) x
+                              {item.quantity}
+                              {item.addons.length > 0 && (
+                                <ul className="text-xs mt-1 font-normal flex gap-1 flex-wrap">
+                                  {item.addons.map((a) => (
+                                    <li
+                                      key={a.addon.id}
+                                      className="bg-zinc-200 w-max px-2 py-1 rounded-md"
+                                    >
+                                      {a.addon.name} x{a.quantity}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between gap-1">
+                          <button
+                            onClick={() => handleServe(order.id)}
+                            className="border border-zinc-200 text-white w-full bg-green-800 px-6 py-2 rounded-lg font-semibold text-lg"
+                          >
+                            Serve
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="w-full flex flex-col items-center justify-center text-center text-zinc-500 py-10 mx-auto">
+                    <p className="text-lg font-medium">No queuing orders</p>
+                    <p className="text-sm text-zinc-400">
+                      Orders will appear here once added.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Search Input */}
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="p-2 border border-zinc-300 rounded-md"
-            />
-          </div>
+            {/* Product List */}
+            <div className="col-span-8 space-y-4">
+              <div className="flex flex-col mb-4 w-max">
+                {/* Category Buttons */}
+                <div className="flex gap-2 p-1 rounded-xl border border-zinc-300 bg-gray-100 mb-4">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat as Category)}
+                      className={`py-2 px-4 flex items-center gap-2 rounded-lg tracking-wide ${
+                        selectedCategory === cat
+                          ? "bg-white border border-zinc-300"
+                          : "bg-none"
+                      }`}
+                    >
+                      {categoryIcons[cat]}
+                      {cat === "All"
+                        ? "All"
+                        : cat.replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase()}
+                    </button>
+                  ))}
+                </div>
 
-          <div className="flex flex-wrap gap-3">
-            {filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => (
-                <button
-                  key={product.id}
-                  onClick={() => addProductToOrder(product)}
-                  className="border border-zinc-300 rounded-md p-2 hover:bg-gray-100 w-[200px]"
-                >
-                  <img
-                    src={product.imageUrl || "/placeholder.jpg"}
-                    alt={product.name}
-                    className="w-full h-40 object-cover rounded"
-                  />
-                  <div className="text-center mt-2 font-medium">
-                    {product.name}
-                  </div>
-                </button>
-              ))
-            ) : (
-              <div className="text-center w-full text-zinc-500 p-10 col-span-full">
-                No products found for this category or search.
+                {/* Search Input */}
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="p-2 border border-zinc-300 rounded-md"
+                />
               </div>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {/* Order Panel */}
-      <div
-        className={`
-    fixed top-0 right-0 h-screen w-[500px] p-3 z-50 
+              <div className="flex flex-wrap gap-3">
+                {filteredProducts.length > 0 ? (
+                  filteredProducts.map((product) => (
+                    <button
+                      key={product.id}
+                      onClick={() => addProductToOrder(product)}
+                      className="border border-zinc-300 rounded-md p-2 hover:bg-gray-100 w-[200px]"
+                    >
+                      <img
+                        src={product.imageUrl || "/placeholder.jpg"}
+                        alt={product.name}
+                        className="w-full h-40 object-cover rounded"
+                      />
+                      <div className="text-center mt-2 font-medium">
+                        {product.name}
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-center w-full text-zinc-500 p-10 col-span-full">
+                    No products found for this category or search.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Order Panel */}
+          <div
+            className={` overflow-y-auto
+    fixed top-0 right-0 h-full w-[600px] p-3 z-50 
     bg-gray-50 border-l border-zinc-300
     shadow-lg flex flex-col justify-between space-y-4
     transform transition-transform duration-300 ease-in-out
     ${
-      isOrderPanelVisible()
+      isOrderPanelVisible
         ? "translate-x-0"
         : "translate-x-full pointer-events-none"
     }
   `}
-      >
-        <div className="flex flex-col">
-          <div className="border border-b-0 rounded-t-md p-3 space-y-3 bg-white border-gray-300 overflow-y-auto max-h-[500px] relative">
-            <h2 className="font-semibold text-lg">Current Order</h2>
+          >
+            <button
+              onClick={() => setIsOrderPanelVisible(false)}
+              className="absolute z-[99] right-6 top-6 p-4 border rounded-md bg-red-500 border-zinc-300"
+            >
+              <X color="white" />
+            </button>
+            <div className="flex flex-col">
+              <div className="border border-b-0 rounded-t-md p-3 space-y-3 bg-white border-gray-300 overflow-y-auto h-[600px] relative">
+                <h2 className="font-semibold text-lg mb-12">Current Order</h2>
 
-            <CustomSelect
-              value={orderType}
-              onChange={setOrderType}
-              options={[
-                { label: "Dine In", value: "DINE_IN" },
-                { label: "Take Out", value: "TAKE_OUT" },
-              ]}
-            />
-
-            {orderItems.map((item, index) => (
-              <div
-                key={index}
-                className="border p-3 bg-gray-50 rounded-md border-zinc-300 pb-2"
-              >
-                <div className="flex justify-between">
-                  <strong>{item.product.name}</strong>
-                  <button onClick={() => removeItem(index)}>
-                    <Trash size={16} className="text-red-600" />
-                  </button>
-                </div>
-                <label className="text-sm">Variant:</label>
-                <CustomSelect
-                  value={item.variant.id}
-                  onChange={(val) => updateVariant(index, val)}
-                  options={item.product.variants.map((v) => ({
-                    label: `${v.name} - ₱${v.price.toFixed(2)}`,
-                    value: v.id,
-                  }))}
-                />
-
-                <div className="flex items-center gap-2 mt-2">
-                  <button
-                    className="p-1 border bg-white border-zinc-300 rounded-md"
-                    onClick={() => updateItemQuantity(index, -1)}
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <span>{item.quantity}</span>
-                  <button
-                    className="p-1 border bg-white border-zinc-300 rounded-md"
-                    onClick={() => updateItemQuantity(index, 1)}
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-
-                <div className="mt-2">
-                  <label className="text-sm">Addons:</label>
-                  <CustomSelect
-                    value=""
-                    onChange={(val) => updateAddon(index, val, 1)}
-                    options={addons.map((a) => ({
-                      label: `${a.name} (₱${a.price.toFixed(2)})`,
-                      value: a.id,
-                    }))}
-                    placeholder="Select addon"
-                  />
-
-                  <ul className="text-xs mt-1 space-y-1">
-                    {item.addons.map((a) => (
-                      <li
-                        key={a.addon.id}
-                        className="flex justify-between items-center"
+                {orderItems.length ? (
+                  <>
+                    {" "}
+                    {orderItems.map((item, index) => (
+                      <div
+                        key={index}
+                        className="border p-3 bg-gray-50 rounded-md border-zinc-300 pb-2"
                       >
-                        {a.addon.name} - ₱{a.addon.price}
-                        <div className="flex gap-1 items-center">
-                          <button
-                            className="p-1 border bg-white border-zinc-300 rounded-md"
-                            onClick={() =>
-                              updateAddon(index, a.addon.id, a.quantity - 1)
-                            }
-                          >
-                            <Minus size={14} />
-                          </button>
-                          <p className="w-6 text-center text-xs">
-                            {" "}
-                            {a.quantity}
-                          </p>
-                          <button
-                            className="p-1 border bg-white border-zinc-300 rounded-md"
-                            onClick={() =>
-                              updateAddon(index, a.addon.id, a.quantity + 1)
-                            }
-                          >
-                            <Plus size={14} />
+                        <div className="flex justify-between">
+                          <strong>{item.product.name}</strong>
+                          <button onClick={() => removeItem(index)}>
+                            <Trash size={16} className="text-red-600" />
                           </button>
                         </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="font-bold text-3xl bg-white p-3 text-center border border-zinc-300 rounded-b-md">
-            Total: ₱{calculateTotal().toFixed(2)}
-          </div>
-        </div>
+                        <label className="text-sm">Variant:</label>
+                        <CustomSelect
+                          value={item.variant.id}
+                          onChange={(val) => updateVariant(index, val)}
+                          options={item.product.variants.map((v) => ({
+                            label: `${v.name} - ₱${v.price.toFixed(2)}`,
+                            value: v.id,
+                          }))}
+                        />
 
-        {/* Payment Section */}
-        <div>
-          <div className="flex gap-10 flex-col">
-            <div className="flex space-x-26 p-3 border border-zinc-300 rounded-md bg-white">
-              <div className="font-bold text-2xl">
-                <span className="text-base font-medium">Payment:</span> <br /> ₱
-                {payment || "0"}
+                        <div className="flex items-center gap-2 mt-2">
+                          <button
+                            className="p-1 border bg-white border-zinc-300 rounded-md"
+                            onClick={() => updateItemQuantity(index, -1)}
+                          >
+                            <Minus size={16} />
+                          </button>
+                          <span>{item.quantity}</span>
+                          <button
+                            className="p-1 border bg-white border-zinc-300 rounded-md"
+                            onClick={() => updateItemQuantity(index, 1)}
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+
+                        <div className="mt-2">
+                          <label className="text-sm">Addons:</label>
+                          <CustomSelect
+                            value=""
+                            onChange={(val) => updateAddon(index, val, 1)}
+                            options={addons.map((a) => ({
+                              label: `${a.name} (₱${a.price.toFixed(2)})`,
+                              value: a.id,
+                            }))}
+                            placeholder="Select addon"
+                          />
+
+                          <ul className="text-xs mt-1 space-y-1">
+                            {item.addons.map((a) => (
+                              <li
+                                key={a.addon.id}
+                                className="flex justify-between items-center"
+                              >
+                                {a.addon.name} - ₱{a.addon.price}
+                                <div className="flex gap-1 items-center">
+                                  <button
+                                    className="p-1 border bg-white border-zinc-300 rounded-md"
+                                    onClick={() =>
+                                      updateAddon(
+                                        index,
+                                        a.addon.id,
+                                        a.quantity - 1
+                                      )
+                                    }
+                                  >
+                                    <Minus size={14} />
+                                  </button>
+                                  <p className="w-6 text-center text-xs">
+                                    {" "}
+                                    {a.quantity}
+                                  </p>
+                                  <button
+                                    className="p-1 border bg-white border-zinc-300 rounded-md"
+                                    onClick={() =>
+                                      updateAddon(
+                                        index,
+                                        a.addon.id,
+                                        a.quantity + 1
+                                      )
+                                    }
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <div className="flex items-center w-full h-full border-dashed border-zinc-300 bg-zinc-100 rounded-lg">
+                    <p className="text-[48px] text-center   w-full font-semibold text-zinc-400">
+                      No orders yet.
+                    </p>
+                  </div>
+                )}
               </div>
-              <div className="font-bold text-2xl">
-                <span className="text-base font-medium">Change:</span> <br />₱
-                {Math.max(
-                  0,
-                  parseFloat(payment || "0") - calculateTotal()
-                ).toFixed(2)}
+              <div className="font-bold text-[24px] bg-white p-3 text-center border border-zinc-300 rounded-b-md">
+                Total: ₱{calculateTotal().toFixed(2)}
               </div>
             </div>
-            <div className="flex gap-2 w-full mb-4">
-              {/* Clear button - Red themed */}
-              <button
-                onClick={clearPayment}
-                disabled={orderItems.length === 0}
-                className={`
+
+            {/* Payment Section */}
+            <div>
+              <div className="flex gap-10 flex-col">
+                <div className="flex space-x-26 p-3 border border-zinc-300 rounded-md bg-white">
+                  <div className="font-bold text-2xl">
+                    <span className="text-base font-medium">Payment:</span>{" "}
+                    <br /> ₱{payment || "0"}
+                  </div>
+                  <div className="font-bold text-2xl">
+                    <span className="text-base font-medium">Change:</span>{" "}
+                    <br />₱
+                    {Math.max(
+                      0,
+                      parseFloat(payment || "0") - calculateTotal()
+                    ).toFixed(2)}
+                  </div>
+                </div>
+                <div className="flex gap-2 w-full mb-4">
+                  {/* Clear button - Red themed */}
+                  <button
+                    onClick={clearPayment}
+                    disabled={orderItems.length === 0}
+                    className={`
       relative w-full h-[80px] rounded-[10px]
       bg-gradient-to-b from-[#5a1e1e] to-[#3a1212]
       shadow-[inset_-8px_0_8px_rgba(0,0,0,0.15),inset_0_-8px_8px_rgba(0,0,0,0.25),0_0_0_2px_rgba(0,0,0,0.75),8px_15px_20px_rgba(0,0,0,0.4)]
@@ -614,27 +656,27 @@ export default function POSPage() {
       active:shadow-[inset_-4px_0_4px_rgba(0,0,0,0.1),inset_0_-4px_4px_rgba(0,0,0,0.15),0_0_0_2px_rgba(0,0,0,0.5),4px_8px_12px_rgba(0,0,0,0.3)]
       ${orderItems.length === 0 ? "opacity-30 cursor-not-allowed" : ""}
     `}
-              >
-                <div
-                  className="absolute top-[3px] left-[4px] right-[12px] bottom-[14px]
+                  >
+                    <div
+                      className="absolute top-[3px] left-[4px] right-[12px] bottom-[14px]
       bg-gradient-to-r from-[#a94444] to-[#ff6666]
       rounded-[10px]
       shadow-[-10px_-10px_10px_rgba(255,255,255,0.25),10px_5px_10px_rgba(0,0,0,0.15)]
       border-l border-b border-t border-black/30 pointer-events-none transition-all duration-100
       group-active:top-[5px] group-active:left-[5px] group-active:bottom-[11px] group-active:right-[11px]
     "
-                ></div>
-                <h6 className="absolute top-[12px] left-[12px] text-white text-[26px] font-medium">
-                  Clear
-                </h6>
-              </button>
+                    ></div>
+                    <h6 className="absolute top-[12px] left-[12px] text-white text-[26px] font-medium">
+                      Clear
+                    </h6>
+                  </button>
 
-              {/* Delete button - Yellow themed */}
-              <button
-                onClick={deleteDigit}
-                data-key="Backspace"
-                disabled={orderItems.length === 0}
-                className={`
+                  {/* Delete button - Yellow themed */}
+                  <button
+                    onClick={deleteDigit}
+                    data-key="Backspace"
+                    disabled={orderItems.length === 0}
+                    className={`
       relative w-full h-[80px] rounded-[10px]
       bg-gradient-to-b from-[#7a5d14] to-[#4a3a0a]
       shadow-[inset_-8px_0_8px_rgba(0,0,0,0.15),inset_0_-8px_8px_rgba(0,0,0,0.25),0_0_0_2px_rgba(0,0,0,0.75),8px_15px_20px_rgba(0,0,0,0.4)]
@@ -643,84 +685,90 @@ export default function POSPage() {
       active:shadow-[inset_-4px_0_4px_rgba(0,0,0,0.1),inset_0_-4px_4px_rgba(0,0,0,0.15),0_0_0_2px_rgba(0,0,0,0.5),4px_8px_12px_rgba(0,0,0,0.3)]
       ${orderItems.length === 0 ? "opacity-30 cursor-not-allowed" : ""}
     `}
-              >
-                <div
-                  className="absolute top-[3px] left-[4px] right-[12px] bottom-[14px]
+                  >
+                    <div
+                      className="absolute top-[3px] left-[4px] right-[12px] bottom-[14px]
       bg-gradient-to-r from-[#ffd966] to-[#f5c232]
       rounded-[10px]
       shadow-[-10px_-10px_10px_rgba(255,255,255,0.25),10px_5px_10px_rgba(0,0,0,0.15)]
       border-l border-b border-t border-black/30 pointer-events-none transition-all duration-100
       group-active:top-[5px] group-active:left-[5px] group-active:bottom-[11px] group-active:right-[11px]
     "
-                ></div>
-                <h6 className="absolute top-[12px] left-[12px] text-white text-[26px] font-medium">
-                  ←
-                </h6>
-              </button>
-            </div>
-          </div>
+                    ></div>
+                    <h6 className="absolute top-[12px] left-[12px] text-white text-[26px] font-medium">
+                      ←
+                    </h6>
+                  </button>
+                </div>
+              </div>
 
-          <div className="grid md:grid-cols-3 gap-2 w-full">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => (
+              <div className="grid md:grid-cols-3 gap-2 w-full">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => (
+                  <button
+                    key={n}
+                    data-key={n}
+                    onClick={() => handleDigit(n)}
+                    disabled={orderItems.length === 0}
+                    className={`${keycapButtonClass} ${
+                      orderItems.length === 0
+                        ? "opacity-30 cursor-not-allowed"
+                        : ""
+                    }`}
+                  >
+                    <div className="absolute top-[3px] left-[4px] right-[12px] bottom-[14px] bg-gradient-to-r from-[#232323] to-[#4a4a4a] rounded-[10px] shadow-[-10px_-10px_10px_rgba(255,255,255,0.25),10px_5px_10px_rgba(0,0,0,0.15)] border-l border-b border-t border-black/30 pointer-events-none transition-all duration-100" />
+                    <h6 className="absolute top-[12px] left-[12px] text-[#e9e9e9] text-[26px] font-medium">
+                      {n}
+                    </h6>
+                  </button>
+                ))}
+
+                {/* 0 spans 2 columns */}
+                <button
+                  data-key="0"
+                  onClick={() => handleDigit("0")}
+                  disabled={orderItems.length === 0}
+                  className={`md:col-span-2 ${keycapButtonClass} ${
+                    orderItems.length === 0
+                      ? "opacity-30 cursor-not-allowed"
+                      : ""
+                  }`}
+                >
+                  <div className="absolute top-[3px] left-[4px] right-[12px] bottom-[14px] bg-gradient-to-r from-[#232323] to-[#4a4a4a] rounded-[10px] shadow-[-10px_-10px_10px_rgba(255,255,255,0.25),10px_5px_10px_rgba(0,0,0,0.15)] border-l border-b border-t border-black/30 pointer-events-none transition-all duration-100" />
+                  <h6 className="absolute top-[12px] left-[12px] text-[#e9e9e9] text-[26px] font-medium">
+                    0
+                  </h6>
+                </button>
+
+                {/* Period Button */}
+                <button
+                  onClick={() => handleDigit(".")}
+                  data-key="."
+                  disabled={orderItems.length === 0}
+                  className={`${keycapButtonClass} ${
+                    orderItems.length === 0
+                      ? "opacity-30 cursor-not-allowed"
+                      : ""
+                  }`}
+                >
+                  <div className="absolute top-[3px] left-[4px] right-[12px] bottom-[14px] bg-gradient-to-r from-[#232323] to-[#4a4a4a] rounded-[10px] shadow-[-10px_-10px_10px_rgba(255,255,255,0.25),10px_5px_10px_rgba(0,0,0,0.15)] border-l border-b border-t border-black/30 pointer-events-none transition-all duration-100" />
+                  <h6 className="absolute top-[12px] left-[12px] text-[#e9e9e9] text-[26px] font-medium">
+                    .
+                  </h6>
+                </button>
+              </div>
+
+              {/* Enter / Done Button below grid */}
               <button
-                key={n}
-                data-key={n}
-                onClick={() => handleDigit(n)}
-                disabled={orderItems.length === 0}
-                className={`${keycapButtonClass} ${
-                  orderItems.length === 0 ? "opacity-30 cursor-not-allowed" : ""
-                }`}
-              >
-                <div className="absolute top-[3px] left-[4px] right-[12px] bottom-[14px] bg-gradient-to-r from-[#232323] to-[#4a4a4a] rounded-[10px] shadow-[-10px_-10px_10px_rgba(255,255,255,0.25),10px_5px_10px_rgba(0,0,0,0.15)] border-l border-b border-t border-black/30 pointer-events-none transition-all duration-100" />
-                <h6 className="absolute top-[12px] left-[12px] text-[#e9e9e9] text-[26px] font-medium">
-                  {n}
-                </h6>
-              </button>
-            ))}
-
-            {/* 0 spans 2 columns */}
-            <button
-              data-key="0"
-              onClick={() => handleDigit("0")}
-              disabled={orderItems.length === 0}
-              className={`md:col-span-2 ${keycapButtonClass} ${
-                orderItems.length === 0 ? "opacity-30 cursor-not-allowed" : ""
-              }`}
-            >
-              <div className="absolute top-[3px] left-[4px] right-[12px] bottom-[14px] bg-gradient-to-r from-[#232323] to-[#4a4a4a] rounded-[10px] shadow-[-10px_-10px_10px_rgba(255,255,255,0.25),10px_5px_10px_rgba(0,0,0,0.15)] border-l border-b border-t border-black/30 pointer-events-none transition-all duration-100" />
-              <h6 className="absolute top-[12px] left-[12px] text-[#e9e9e9] text-[26px] font-medium">
-                0
-              </h6>
-            </button>
-
-            {/* Period Button */}
-            <button
-              onClick={() => handleDigit(".")}
-              data-key="."
-              disabled={orderItems.length === 0}
-              className={`${keycapButtonClass} ${
-                orderItems.length === 0 ? "opacity-30 cursor-not-allowed" : ""
-              }`}
-            >
-              <div className="absolute top-[3px] left-[4px] right-[12px] bottom-[14px] bg-gradient-to-r from-[#232323] to-[#4a4a4a] rounded-[10px] shadow-[-10px_-10px_10px_rgba(255,255,255,0.25),10px_5px_10px_rgba(0,0,0,0.15)] border-l border-b border-t border-black/30 pointer-events-none transition-all duration-100" />
-              <h6 className="absolute top-[12px] left-[12px] text-[#e9e9e9] text-[26px] font-medium">
-                .
-              </h6>
-            </button>
-          </div>
-
-          {/* Enter / Done Button below grid */}
-          <button
-            data-key="Enter"
-            onClick={() => {
-              if (!isPaymentSufficient) {
-                showToast("Payment is not enough.", "error");
-                return;
-              }
-              setShowDialog(true);
-            }}
-            disabled={!isPaymentSufficient || orderItems.length === 0}
-            className={`mt-4 relative w-full h-[80px] rounded-[10px]
+                data-key="Enter"
+                onClick={() => {
+                  if (!isPaymentSufficient) {
+                    showToast("Payment is not enough.", "error");
+                    return;
+                  }
+                  setShowDialog(true);
+                }}
+                disabled={!isPaymentSufficient || orderItems.length === 0}
+                className={`mt-4 relative w-full h-[80px] rounded-[10px]
     bg-gradient-to-b from-[#216e3a] to-[#124526]
     shadow-[inset_-6px_0_6px_rgba(0,0,0,0.15),inset_0_-6px_6px_rgba(0,0,0,0.25),0_0_0_2px_rgba(0,0,0,0.75),8px_15px_20px_rgba(0,0,0,0.4)]
     overflow-hidden transition-all duration-100
@@ -731,63 +779,85 @@ export default function POSPage() {
         ? "opacity-30 cursor-not-allowed"
         : ""
     }`}
-          >
-            <div className="absolute top-[3px] left-[4px] right-[10px] bottom-[10px] bg-gradient-to-r from-[#5dd69c] to-[#3dbf84] rounded-[10px] shadow-[-6px_-6px_6px_rgba(255,255,255,0.25),6px_3px_6px_rgba(0,0,0,0.15)] border-l border-b border-t border-black/30 pointer-events-none transition-all duration-100" />
-            <h6 className="absolute top-[12px] left-[12px] text-white text-[26px] font-medium">
-              Done
-            </h6>
-          </button>
-        </div>
-      </div>
-
-      <OrderConfirmationDialog
-        isOpen={showDialog}
-        onClose={() => setShowDialog(false)}
-        title="Review Order"
-      >
-        <div className="space-y-2 text-lg">
-          {orderItems.map((item, index) => (
-            <div key={index}>
-              <strong>
-                {item.product.name} ({item.variant.name}) x{item.quantity}
-              </strong>
-              <ul className="ml-4 list-disc">
-                {item.addons.map((a) => (
-                  <li key={a.addon.id}>
-                    {a.addon.name} ₱{a.addon.price} x{a.quantity}
-                  </li>
-                ))}
-              </ul>
+              >
+                <div className="absolute top-[3px] left-[4px] right-[10px] bottom-[10px] bg-gradient-to-r from-[#5dd69c] to-[#3dbf84] rounded-[10px] shadow-[-6px_-6px_6px_rgba(255,255,255,0.25),6px_3px_6px_rgba(0,0,0,0.15)] border-l border-b border-t border-black/30 pointer-events-none transition-all duration-100" />
+                <h6 className="absolute top-[12px] left-[12px] text-white text-[26px] font-medium">
+                  Done
+                </h6>
+              </button>
             </div>
-          ))}
-          <div className="mt-4 flex p-3 rounded-md bg-gray-50 border border-zinc-300 justify-between">
-            <p>Total: ₱{calculateTotal().toFixed(2)}</p>
-            <p>Paid: ₱{payment || "0"}</p>
-            <p>
-              Change: ₱
-              {Math.max(
-                0,
-                parseFloat(payment || "0") - calculateTotal()
-              ).toFixed(2)}
-            </p>
+          </div>
+
+          <OrderConfirmationDialog
+            isOpen={showDialog}
+            onClose={() => setShowDialog(false)}
+            title="Review Order"
+          >
+            <div className="space-y-2 text-lg">
+              {orderItems.map((item, index) => (
+                <div key={index}>
+                  <strong>
+                    {item.product.name} ({item.variant.name}) x{item.quantity}
+                  </strong>
+                  <ul className="ml-4 list-disc">
+                    {item.addons.map((a) => (
+                      <li key={a.addon.id}>
+                        {a.addon.name} ₱{a.addon.price} x{a.quantity}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+              <div className="mt-4 flex p-3 rounded-md bg-gray-50 border border-zinc-300 justify-between">
+                <p>Total: ₱{calculateTotal().toFixed(2)}</p>
+                <p>Paid: ₱{payment || "0"}</p>
+                <p>
+                  Change: ₱
+                  {Math.max(
+                    0,
+                    parseFloat(payment || "0") - calculateTotal()
+                  ).toFixed(2)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setShowDialog(false)}
+                className="px-4 py-2 border rounded-md text-xl border-zinc-300 text-zinc-700 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmOrder}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-xl"
+              >
+                Confirm
+              </button>
+            </div>
+          </OrderConfirmationDialog>
+        </div>
+      ) : (
+        <div className="w-full h-screen bg-yellow-100 flex flex-col items-center justify-center gap-y-[100px] -mt-[200px]">
+          <h2 className="text-center text-[56px] font-bold">
+            Welcome to Papa Bear Cafe!
+          </h2>
+          <div className="flex gap-x-10">
+            <button
+              onClick={() => setOrderType("DINE_IN")}
+              className="text-[40px] bg-green-500 rounded-lg px-10 py-8"
+            >
+              Dine In
+            </button>
+            <button
+              onClick={() => setOrderType("TAKE_OUT")}
+              className="text-[40px] bg-green-500 rounded-lg px-10 py-8"
+            >
+              Take Out
+            </button>
           </div>
         </div>
-
-        <div className="flex justify-end gap-2 mt-4">
-          <button
-            onClick={() => setShowDialog(false)}
-            className="px-4 py-2 border rounded-md text-xl border-zinc-300 text-zinc-700 hover:bg-gray-100"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirmOrder}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-xl"
-          >
-            Confirm
-          </button>
-        </div>
-      </OrderConfirmationDialog>
-    </div>
+      )}
+    </>
   );
 }

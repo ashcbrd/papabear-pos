@@ -7,6 +7,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model User {
+  id         String      @id @default(uuid())
+  name String
+
+}
+
 model Product {
   id         String      @id @default(uuid())
   name       String
@@ -147,4 +153,5 @@ enum OrderType {
 enum OrderStatus {
   QUEUING
   SERVED
+  CANCELLED
 }

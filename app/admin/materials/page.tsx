@@ -191,12 +191,12 @@ export default function MaterialsAdminPage() {
       <table className="w-full mt-6 border border-zinc-300 text-sm bg-white rounded-md overflow-hidden">
         <thead>
           <tr className="text-left ">
-            <th className="p-2 text-left border border-zinc-300">Name</th>
-            <th className="p-2 text-left border border-zinc-300">
+            <th className="p-2 text-left border-y border-zinc-300">Name</th>
+            <th className="p-2 text-left border-y border-zinc-300">
               Price/Piece
             </th>
-            <th className="p-2 text-left border border-zinc-300">Stock</th>
-            <th className="p-2 text-left border border-zinc-300">Actions</th>
+            <th className="p-2 text-left border-y border-zinc-300">Stock</th>
+            <th className="p-2 text-left border-y border-zinc-300">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -204,14 +204,14 @@ export default function MaterialsAdminPage() {
             <tr key={m.id} className="border-t border-zinc-300">
               {editingId === m.id ? (
                 <>
-                  <td className="p-2 border border-zinc-300">
+                  <td className="p-2 border-y border-zinc-300">
                     <input
                       value={editForm.name ?? m.name}
                       onChange={(e) => handleEditChange("name", e.target.value)}
                       className="border border-zinc-300 p-1 w-full rounded-md"
                     />
                   </td>
-                  <td className="p-2 border border-zinc-300">
+                  <td className="p-2 border-y border-zinc-300">
                     <input
                       type="number"
                       value={editForm.pricePerPiece ?? m.pricePerPiece}
@@ -224,7 +224,7 @@ export default function MaterialsAdminPage() {
                       className="border border-zinc-300 p-1 w-full rounded-md"
                     />
                   </td>
-                  <td className="p-2 border border-zinc-300">
+                  <td className="p-2 border-y border-zinc-300">
                     <input
                       type="number"
                       value={editForm.stockQuantity ?? m.stock?.quantity ?? 0}
@@ -254,14 +254,14 @@ export default function MaterialsAdminPage() {
                 </>
               ) : (
                 <>
-                  <td className="p-2 border border-zinc-300">{m.name}</td>
-                  <td className="p-2 border border-zinc-300">
+                  <td className="p-2 border-y border-zinc-300">{m.name}</td>
+                  <td className="p-2 border-y border-zinc-300">
                     ₱{m.pricePerPiece.toFixed(2)}
                   </td>
-                  <td className="p-2 border border-zinc-300">
+                  <td className="p-2 border-y border-zinc-300">
                     {m.stock?.quantity ?? 0}
                   </td>
-                  <td className="p-2 flex gap-2 border border-zinc-300">
+                  <td className="p-2 flex gap-2  border-zinc-300">
                     <button
                       onClick={() => {
                         setEditingId(m.id);
