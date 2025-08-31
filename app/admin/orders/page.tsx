@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import CustomSelect from "@/components/custom-select";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Calendar, Filter } from "lucide-react";
+import { useData } from "@/lib/data-context";
+import {
+  AdminPageHeader,
+  AdminCard,
+  AdminButton,
+  AdminInput
+} from "@/components/admin";
 
 type DateFilter = "all" | "month" | "today" | "range" | "custom";
 
@@ -32,135 +39,180 @@ const filterOptions = [
 ] satisfies { label: string; value: DateFilter }[];
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { orders: allOrders, loadOrders } = useData();
   const [filter, setFilter] = useState<DateFilter>("all");
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams({ filter });
+    loadOrders({ filter, startDate, endDate });
+  }, [filter, startDate, endDate, loadOrders]);
 
-    if (filter === "range" && startDate && endDate) {
-      params.append("start", startDate.toISOString());
-      params.append("end", endDate.toISOString());
-    }
-
-    if (filter === "custom" && startDate) {
-      params.append("date", startDate.toISOString());
-    }
-
-    fetch(`/api/orders?${params.toString()}`)
-      .then((res) => res.json())
-      .then(setOrders);
-  }, [filter, startDate, endDate]);
+  // Filter orders based on current filter
+  const orders = allOrders;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center gap-2">
-        <ClipboardList size={24} className="text-green-700" />
-        <h1 className="text-xl font-bold">Orders</h1>
-      </div>
+    <div className="space-y-8">
+      <AdminPageHeader
+        title="Orders"
+        icon={<ClipboardList size={24} />}
+        description="View and manage all customer orders"
+        actions={
+          <AdminButton
+            variant="outline"
+            icon={<Filter size={16} />}
+            onClick={() => {/* Add filter functionality */}}
+          >
+            Advanced Filters
+          </AdminButton>
+        }
+      />
 
-      <div className="flex items-center gap-4 flex-wrap mb-4">
-        <CustomSelect<DateFilter>
-          value={filter}
-          onChange={setFilter}
-          options={filterOptions}
-          className="w-60"
-        />
-
-        {filter === "range" && (
-          <>
-            <input
-              type="date"
-              value={startDate?.toISOString().split("T")[0] || ""}
-              onChange={(e) => setStartDate(new Date(e.target.value))}
-              className="border border-zinc-300 px-2 py-1 rounded-md"
+      <AdminCard>
+        <div className="mb-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Filter Orders</h3>
+          <div className="flex items-center gap-4 flex-wrap">
+            <CustomSelect<DateFilter>
+              value={filter}
+              onChange={setFilter}
+              options={filterOptions}
+              className="w-60"
             />
-            <input
-              type="date"
-              value={endDate?.toISOString().split("T")[0] || ""}
-              onChange={(e) => setEndDate(new Date(e.target.value))}
-              className="border border-zinc-300 px-2 py-1 rounded-md"
-            />
-          </>
-        )}
 
-        {filter === "custom" && (
-          <input
-            type="date"
-            value={startDate?.toISOString().split("T")[0] || ""}
-            onChange={(e) => setStartDate(new Date(e.target.value))}
-            className="border border-zinc-300 px-2 py-1 rounded-md"
-          />
-        )}
-      </div>
+            {filter === "range" && (
+              <>
+                <AdminInput
+                  type="date"
+                  value={startDate?.toISOString().split("T")[0] || ""}
+                  onChange={(e) => setStartDate(new Date(e.target.value))}
+                  fullWidth={false}
+                  className="w-48"
+                  icon={<Calendar size={18} />}
+                />
+                <AdminInput
+                  type="date"
+                  value={endDate?.toISOString().split("T")[0] || ""}
+                  onChange={(e) => setEndDate(new Date(e.target.value))}
+                  fullWidth={false}
+                  className="w-48"
+                  icon={<Calendar size={18} />}
+                />
+              </>
+            )}
 
-      {orders.length === 0 && (
-        <div className="text-gray-500 border border-zinc-300 bg-white rounded-md p-6 text-center">
-          No orders found.
-        </div>
-      )}
-
-      {orders.map((order) => (
-        <div
-          key={order.id}
-          className="border border-zinc-300 p-4 rounded-md bg-white space-y-4"
-        >
-          <div className="flex justify-between items-center border-b border-zinc-300 pb-2 text-sm text-gray-600">
-            <div>
-              <span className="font-medium">Order ID:</span> {order.id}
-            </div>
-            <div className="text-gray-500">
-              {new Date(order.createdAt).toLocaleString()}
-            </div>
+            {filter === "custom" && (
+              <AdminInput
+                type="date"
+                value={startDate?.toISOString().split("T")[0] || ""}
+                onChange={(e) => setStartDate(new Date(e.target.value))}
+                fullWidth={false}
+                className="w-48"
+                icon={<Calendar size={18} />}
+              />
+            )}
           </div>
+        </div>
+      </AdminCard>
 
-          <div className="space-y-3">
-            {order.items.map((item, idx) => {
-              const variantTotal = item.variant.price * item.quantity;
-              const addonsTotal = item.addons.reduce(
-                (sum, a) => sum + a.addon.price * a.quantity,
-                0
-              );
-              const itemTotal = variantTotal + addonsTotal;
-
-              return (
-                <div
-                  key={idx}
-                  className="border border-zinc-200 p-3 rounded-md bg-gray-50 text-sm"
-                >
-                  <div className="font-semibold">
-                    {item.product.name} – {item.variant.name} × {item.quantity}{" "}
-                    (₱{item.variant.price.toFixed(2)})
+      {orders.length === 0 ? (
+        <AdminCard>
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ClipboardList size={32} className="text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Orders Found</h3>
+            <p className="text-gray-600">No orders match your current filter criteria.</p>
+          </div>
+        </AdminCard>
+      ) : (
+        <div className="space-y-6">
+          {orders.map((order) => (
+            <AdminCard key={order.id} className="hover:shadow-lg transition-shadow">
+              <div className="flex justify-between items-start mb-6">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-500">Order ID:</span>
+                    <span className="font-mono text-sm font-bold text-gray-900">{order.id}</span>
                   </div>
-
-                  {item.addons.length > 0 && (
-                    <ul className="ml-4 mt-2 list-disc text-xs text-gray-700">
-                      {item.addons.map((a, i) => (
-                        <li key={i}>
-                          {a.addon.name} × {a.quantity} (₱
-                          {a.addon.price.toFixed(2)})
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  <div className="text-right mt-3 font-semibold">
-                    Item Total: ₱{itemTotal.toFixed(2)}
+                  <div className="flex items-center gap-2">
+                    <Calendar size={16} className="text-gray-400" />
+                    <span className="text-sm text-gray-600">
+                      {new Date(order.createdAt).toLocaleString()}
+                    </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-gray-900">₱{order.total.toFixed(2)}</div>
+                  <div className="text-sm text-gray-500">Total Amount</div>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-3 gap-4 border-t border-zinc-300 pt-3 text-sm text-gray-700 font-medium">
-            <div>Total: ₱{order.total.toFixed(2)}</div>
-            <div>Paid: ₱{order.paid.toFixed(2)}</div>
-            <div>Change: ₱{order.change.toFixed(2)}</div>
-          </div>
+              <div className="space-y-4">
+                {order.items?.map((item: any, idx: number) => {
+                  const variantTotal = (item.variant?.price || 0) * item.quantity;
+                  const addonsTotal = item.addons?.reduce(
+                    (sum: number, a: any) => sum + (a.addon?.price || 0) * a.quantity,
+                    0
+                  ) || 0;
+                  const itemTotal = variantTotal + addonsTotal;
+
+                  return (
+                    <div
+                      key={idx}
+                      className="bg-gradient-to-r from-gray-50 to-white p-4 rounded-xl border border-gray-100"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900">
+                            {item.product?.name || 'Unknown Product'} – {item.variant?.name || 'Unknown Variant'}
+                          </h4>
+                          <div className="text-sm text-gray-600">
+                            Quantity: {item.quantity} × ₱{(item.variant?.price || 0).toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-gray-900">₱{itemTotal.toFixed(2)}</div>
+                        </div>
+                      </div>
+
+                      {item.addons?.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="text-sm font-medium text-gray-700 mb-2">Add-ons:</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {item.addons.map((a: any, i: number) => (
+                              <div key={i} className="flex justify-between text-sm text-gray-600">
+                                <span>{a.addon?.name || 'Unknown Addon'} × {a.quantity}</span>
+                                <span>₱{((a.addon?.price || 0) * a.quantity).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <div className="text-lg font-bold text-blue-900">₱{order.total?.toFixed(2) || '0.00'}</div>
+                    <div className="text-sm text-blue-600">Total</div>
+                  </div>
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <div className="text-lg font-bold text-green-900">₱{order.paid?.toFixed(2) || '0.00'}</div>
+                    <div className="text-sm text-green-600">Paid</div>
+                  </div>
+                  <div className="bg-amber-50 p-3 rounded-lg">
+                    <div className="text-lg font-bold text-amber-900">₱{order.change?.toFixed(2) || '0.00'}</div>
+                    <div className="text-sm text-amber-600">Change</div>
+                  </div>
+                </div>
+              </div>
+            </AdminCard>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

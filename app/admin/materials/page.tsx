@@ -3,9 +3,19 @@
 import { useEffect, useState } from "react";
 import { MaterialInput, MaterialWithStock } from "@/lib/types";
 import { Boxes, Pencil, Trash } from "lucide-react";
+import { useData } from "@/lib/data-context";
+import {
+  AdminPageHeader,
+  AdminFormSection,
+  AdminInput,
+  AdminButton,
+  AdminTable,
+  AdminActions,
+  AdminCard
+} from "@/components/admin";
 
 export default function MaterialsAdminPage() {
-  const [materials, setMaterials] = useState<MaterialWithStock[]>([]);
+  const { materials, createMaterial, updateMaterial, deleteMaterial } = useData();
   const [name, setName] = useState("");
   const [isPackage, setIsPackage] = useState(false);
   const [packagePrice, setPackagePrice] = useState<number>(0);
@@ -17,14 +27,6 @@ export default function MaterialsAdminPage() {
     Partial<MaterialInput & { stockQuantity?: number }>
   >({});
 
-  const fetchMaterials = async () => {
-    const res = await fetch("/api/materials");
-    setMaterials(await res.json());
-  };
-
-  useEffect(() => {
-    fetchMaterials();
-  }, []);
 
   useEffect(() => {
     if (isPackage && packagePrice && unitsPerPackage > 0) {
@@ -32,34 +34,39 @@ export default function MaterialsAdminPage() {
     }
   }, [isPackage, packagePrice, unitsPerPackage]);
 
-  const createMaterial = async () => {
-    const payload: MaterialInput = {
-      name,
-      isPackage,
-      packagePrice: isPackage ? packagePrice : undefined,
-      unitsPerPackage: isPackage ? unitsPerPackage : undefined,
-      pricePerPiece: !isPackage ? pricePerPiece : undefined,
-      stockQuantity,
-    };
+  const handleCreateMaterial = async () => {
+    try {
+      const payload: MaterialInput = {
+        name,
+        isPackage,
+        packagePrice: isPackage ? packagePrice : undefined,
+        unitsPerPackage: isPackage ? unitsPerPackage : undefined,
+        pricePerPiece: !isPackage ? pricePerPiece : undefined,
+        stockQuantity,
+      };
 
-    await fetch("/api/materials", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+      await createMaterial(payload);
 
-    setName("");
-    setIsPackage(false);
-    setPackagePrice(0);
-    setUnitsPerPackage(0);
-    setPricePerPiece(0);
-    setStockQuantity(0);
-    fetchMaterials();
+      setName("");
+      setIsPackage(false);
+      setPackagePrice(0);
+      setUnitsPerPackage(0);
+      setPricePerPiece(0);
+      setStockQuantity(0);
+    } catch (error) {
+      console.error("Failed to create material:", error);
+      alert("Failed to create material");
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/materials/${id}`, { method: "DELETE" });
-    fetchMaterials();
+    if (!confirm("Are you sure you want to delete this material?")) return;
+    try {
+      await deleteMaterial(id);
+    } catch (error) {
+      console.error("Failed to delete material:", error);
+      alert("Failed to delete material");
+    }
   };
 
   const handleEditChange = (
@@ -71,25 +78,25 @@ export default function MaterialsAdminPage() {
 
   const saveEdit = async () => {
     if (!editingId) return;
+    
+    try {
+      const payload = {
+        name: editForm.name ?? "",
+        isPackage: editForm.isPackage ?? false,
+        packagePrice: editForm.isPackage ? editForm.packagePrice : undefined,
+        unitsPerPackage: editForm.isPackage ? editForm.unitsPerPackage : undefined,
+        pricePerPiece: !editForm.isPackage ? editForm.pricePerPiece : undefined,
+        stockQuantity: editForm.stockQuantity ?? 0,
+      };
 
-    const payload = {
-      name: editForm.name ?? "",
-      isPackage,
-      packagePrice: isPackage ? packagePrice : undefined,
-      unitsPerPackage: isPackage ? unitsPerPackage : undefined,
-      pricePerPiece: !isPackage ? editForm.pricePerPiece : undefined,
-      stockQuantity: editForm.stockQuantity ?? 0,
-    };
+      await updateMaterial(editingId, payload);
 
-    await fetch(`/api/materials/${editingId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    setEditingId(null);
-    setEditForm({});
-    fetchMaterials();
+      setEditingId(null);
+      setEditForm({});
+    } catch (error) {
+      console.error("Failed to update material:", error);
+      alert("Failed to update material");
+    }
   };
 
   return (
@@ -180,7 +187,7 @@ export default function MaterialsAdminPage() {
           </button>
 
           <button
-            onClick={createMaterial}
+            onClick={handleCreateMaterial}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
           >
             Create Material

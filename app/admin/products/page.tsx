@@ -2,21 +2,49 @@
 
 import { useEffect, useState } from "react";
 import { Category, Ingredient, Material } from "@prisma/client";
-import { Pencil, Trash, PlusCircle, XCircle, Package } from "lucide-react";
+import { Pencil, Trash, PlusCircle, XCircle, Package, Plus } from "lucide-react";
 import CustomSelect from "@/components/custom-select";
+import { useData } from "@/lib/data-context";
+import {
+  AdminPageHeader,
+  AdminFormSection,
+  AdminInput,
+  AdminSelect,
+  AdminButton,
+  AdminTable,
+  AdminActions,
+  AdminCard
+} from "@/components/admin";
 
-type VariantName = "general" | "small" | "medium" | "large" | "16oz" | "22oz";
-const allVariantOptions: VariantName[] = [
-  "general",
-  "small",
-  "medium",
-  "large",
-  "16oz",
-  "22oz",
+type FlavorName = "Original" | "Chocolate" | "Vanilla" | "Strawberry" | "Caramel" | "Matcha" | "Hazelnut" | "Mocha" | "Irish Cream" | "Taro" | "Honeydew" | "Mango" | "Coconut";
+const allFlavorOptions: FlavorName[] = [
+  "Original",
+  "Chocolate", 
+  "Vanilla",
+  "Strawberry",
+  "Caramel",
+  "Matcha",
+  "Hazelnut",
+  "Mocha", 
+  "Irish Cream",
+  "Taro",
+  "Honeydew",
+  "Mango",
+  "Coconut",
 ];
 
-interface VariantInput {
-  name: VariantName;
+type SizeName = "Medium" | "Large";
+const allSizeOptions: SizeName[] = [
+  "Medium",
+  "Large",
+];
+
+interface FlavorInput {
+  name: FlavorName;
+}
+
+interface SizeInput {
+  name: SizeName;
   price: number;
   materials: { id: string; quantity: number }[];
   ingredients: { id: string; quantity: number }[];
@@ -27,9 +55,13 @@ interface Product {
   name: string;
   category: Category;
   imageUrl: string | null;
-  variants: {
+  flavors: {
     id: string;
-    name: VariantName;
+    name: FlavorName;
+  }[];
+  sizes: {
+    id: string;
+    name: SizeName;
     price: number;
     materials: { material: Material; quantityUsed: number }[];
     ingredients: { ingredient: Ingredient; quantityUsed: number }[];
@@ -37,76 +69,68 @@ interface Product {
 }
 
 export default function ProductsAdminPage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const { products, materials, ingredients, createProduct, updateProduct, deleteProduct } = useData();
   const [name, setName] = useState("");
   const [category, setCategory] = useState<Category>("InsideMeals");
-  const [variants, setVariants] = useState<VariantInput[]>([
-    { name: "general", price: 0, materials: [], ingredients: [] },
+  const [flavors, setFlavors] = useState<FlavorInput[]>([
+    { name: "Original" },
+  ]);
+  const [sizes, setSizes] = useState<SizeInput[]>([
+    { name: "Medium", price: 0, materials: [], ingredients: [] },
   ]);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
-
-  const [materials, setMaterials] = useState<Material[]>([]);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-
-  const loadAll = async () => {
-    setProducts(await (await fetch("/api/products")).json());
-    setMaterials(await (await fetch("/api/materials")).json());
-    setIngredients(await (await fetch("/api/ingredients")).json());
-  };
-
-  useEffect(() => {
-    loadAll();
-  }, []);
 
   const resetForm = () => {
     setEditingProductId(null);
     setName("");
     setCategory("InsideMeals");
-    setVariants([
-      { name: "general", price: 0, materials: [], ingredients: [] },
-    ]);
+    setFlavors([{ name: "Original" }]);
+    setSizes([{ name: "Medium", price: 0, materials: [], ingredients: [] }]);
   };
 
   const handleSave = async () => {
-    const payload = { name, category, variants };
-    const url = editingProductId
-      ? `/api/products/${editingProductId}`
-      : "/api/products";
-    const method = editingProductId ? "PUT" : "POST";
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
+    try {
+      const payload = { name, category, flavors, sizes };
+      if (editingProductId) {
+        await updateProduct(editingProductId, payload);
+      } else {
+        await createProduct(payload);
+      }
       resetForm();
-      loadAll();
-    } else {
-      console.error(await res.text());
+    } catch (error) {
+      console.error("Save failed:", error);
       alert("Save failed");
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this product?")) return;
-    const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
-    if (res.ok) loadAll();
-    else console.error(await res.text());
+    try {
+      await deleteProduct(id);
+    } catch (error) {
+      console.error("Delete failed:", error);
+      alert("Delete failed");
+    }
   };
 
   const startEdit = (p: Product) => {
     setEditingProductId(p.id);
     setName(p.name);
     setCategory(p.category);
-    setVariants(
-      p.variants.map((v) => ({
-        name: v.name,
-        price: v.price,
-        materials: v.materials.map((m) => ({
+    setFlavors(
+      p.flavors.map((f) => ({
+        name: f.name,
+      }))
+    );
+    setSizes(
+      p.sizes.map((s) => ({
+        name: s.name,
+        price: s.price,
+        materials: s.materials.map((m) => ({
           id: m.material.id,
           quantity: m.quantityUsed,
         })),
-        ingredients: v.ingredients.map((i) => ({
+        ingredients: s.ingredients.map((i) => ({
           id: i.ingredient.id,
           quantity: i.quantityUsed,
         })),
@@ -114,150 +138,324 @@ export default function ProductsAdminPage() {
     );
   };
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center gap-2">
-        <Package size={24} className="text-green-700" />
-        <h1 className="text-xl font-bold">Products</h1>
-      </div>
-
-      <div className="bg-white border border-zinc-300 rounded-md p-4 space-y-4">
-        <input
-          placeholder="Product Name"
-          className="border border-zinc-300 p-2 w-full rounded-md"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-
+  // Prepare table columns
+  const tableColumns = [
+    {
+      header: 'Name',
+      accessor: 'name',
+    },
+    {
+      header: 'Category',
+      accessor: 'category',
+      cell: (row: any) => (
+        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+          {row.category.replace(/([a-z])([A-Z])/g, '$1 $2')}
+        </span>
+      )
+    },
+    {
+      header: 'Flavors',
+      accessor: 'flavors',
+      cell: (row: any) => (
+        <div className="space-y-1">
+          {row.flavors?.map((f: any, i: number) => (
+            <div key={i} className="text-sm">
+              <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                {f.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      )
+    },
+    {
+      header: 'Sizes',
+      accessor: 'sizes',
+      cell: (row: any) => (
+        <div className="space-y-2">
+          {row.sizes?.map((s: any, i: number) => (
+            <div key={i} className="text-sm">
+              <span className="font-medium">{s.name}</span> - ₱{s.price?.toFixed(2)}
+            </div>
+          ))}
+        </div>
+      )
+    },
+    {
+      header: 'Actions',
+      accessor: 'id',
+      cell: (row: any) => (
         <div className="flex items-center gap-2">
-          <CustomSelect<Category>
+          <AdminButton
+            size="sm"
+            variant="outline"
+            icon={<Pencil size={14} />}
+            onClick={() => startEdit(row)}
+          >
+            Edit
+          </AdminButton>
+          <AdminButton
+            size="sm"
+            variant="danger"
+            icon={<Trash size={14} />}
+            onClick={() => handleDelete(row.id)}
+          >
+            Delete
+          </AdminButton>
+        </div>
+      )
+    }
+  ];
+
+  return (
+    <div className="space-y-8">
+      <AdminPageHeader
+        title="Products"
+        icon={<Package size={24} />}
+        description="Manage your restaurant's products, variants, and pricing"
+      />
+
+      <AdminFormSection
+        title="Create New Product"
+        description="Add a new product with flavors, sizes, materials, and ingredients"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <AdminInput
+            label="Product Name"
+            placeholder="Enter product name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+
+          <AdminSelect
+            label="Category"
             value={category}
+            onChange={(e) => setCategory(e.target.value as Category)}
             options={[
               { label: "Inside Meals", value: "InsideMeals" },
               { label: "Outside Snacks", value: "OutsideSnacks" },
               { label: "Inside Beverages", value: "InsideBeverages" },
             ]}
-            onChange={setCategory}
-            className="flex-1"
           />
         </div>
 
-        {variants.map((variant, idx) => (
-          <VariantEditor
-            key={idx}
-            idx={idx}
-            variant={variant}
-            variants={variants}
-            setVariants={setVariants}
-            materials={materials}
-            ingredients={ingredients}
-          />
-        ))}
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-lg font-semibold text-gray-900">Product Flavors</h4>
+              <AdminButton
+                size="sm"
+                variant="outline"
+                icon={<Plus size={16} />}
+                disabled={flavors.length >= allFlavorOptions.length}
+                onClick={() => {
+                  const name = allFlavorOptions.find(
+                    (opt) => !flavors.some((f) => f.name === opt)
+                  )!;
+                  setFlavors([...flavors, { name }]);
+                }}
+              >
+                Add Flavor
+              </AdminButton>
+            </div>
 
-        <button
-          className="flex items-center gap-1 text-green-700 hover:underline"
-          disabled={variants.length >= allVariantOptions.length}
-          onClick={() => {
-            const name = allVariantOptions.find(
-              (opt) => !variants.some((v) => v.name === opt)
-            )!;
-            setVariants([
-              ...variants,
-              { name, price: 0, materials: [], ingredients: [] },
-            ]);
-          }}
-        >
-          <PlusCircle size={16} /> Add Variant
-        </button>
+            {flavors.map((flavor, idx) => (
+              <FlavorEditor
+                key={idx}
+                idx={idx}
+                flavor={flavor}
+                flavors={flavors}
+                setFlavors={setFlavors}
+              />
+            ))}
+          </div>
 
-        <div className="mt-4 flex gap-2">
-          <button
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-lg font-semibold text-gray-900">Product Sizes</h4>
+              <AdminButton
+                size="sm"
+                variant="outline"
+                icon={<Plus size={16} />}
+                disabled={sizes.length >= allSizeOptions.length}
+                onClick={() => {
+                  const name = allSizeOptions.find(
+                    (opt) => !sizes.some((s) => s.name === opt)
+                  )!;
+                  setSizes([
+                    ...sizes,
+                    { name, price: 0, materials: [], ingredients: [] },
+                  ]);
+                }}
+              >
+                Add Size
+              </AdminButton>
+            </div>
+
+            {sizes.map((size, idx) => (
+              <SizeEditor
+                key={idx}
+                idx={idx}
+                size={size}
+                sizes={sizes}
+                setSizes={setSizes}
+                materials={materials}
+                ingredients={ingredients}
+              />
+            ))}
+          </div>
+        </div>
+
+        <AdminActions>
+          <AdminButton
+            variant="secondary"
             onClick={resetForm}
-            className="bg-zinc-200 text-zinc-700 px-4 py-2 rounded-md hover:bg-zinc-300"
           >
             Cancel
-          </button>
-          <button
+          </AdminButton>
+          <AdminButton
+            variant="primary"
             onClick={handleSave}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
           >
-            {editingProductId ? "Update Product" : "Save Product"}
-          </button>
-        </div>
-      </div>
+            {editingProductId ? "Update Product" : "Create Product"}
+          </AdminButton>
+        </AdminActions>
+      </AdminFormSection>
 
-      <ProductTable
-        products={products}
-        materials={materials}
-        ingredients={ingredients}
-        onEdit={startEdit}
-        onDelete={handleDelete}
-      />
+      <AdminCard>
+        <div className="mb-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-2">All Products</h3>
+          <p className="text-gray-600">Manage and edit your existing products</p>
+        </div>
+        <AdminTable
+          columns={tableColumns}
+          data={products}
+          emptyMessage="No products found. Create your first product above."
+        />
+      </AdminCard>
     </div>
   );
 }
 
-function VariantEditor({
+function FlavorEditor({
   idx,
-  variant,
-  variants,
-  setVariants,
+  flavor,
+  flavors,
+  setFlavors,
+}: {
+  idx: number;
+  flavor: FlavorInput;
+  flavors: FlavorInput[];
+  setFlavors: React.Dispatch<React.SetStateAction<FlavorInput[]>>;
+}) {
+  const update = (f: FlavorInput) =>
+    setFlavors(flavors.map((x, i) => (i === idx ? f : x)));
+
+  return (
+    <AdminCard className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
+      <div className="flex items-center gap-4 mb-2">
+        <AdminSelect
+          label="Flavor"
+          value={flavor.name}
+          onChange={(e) => update({ ...flavor, name: e.target.value as FlavorName })}
+          options={allFlavorOptions
+            .filter(
+              (opt) =>
+                opt === flavor.name || !flavors.some((f) => f.name === opt)
+            )
+            .map((opt) => ({ label: opt, value: opt }))}
+          fullWidth={false}
+          className="w-40"
+        />
+
+        <div className="mt-6">
+          <AdminButton
+            size="sm"
+            variant="danger"
+            icon={<XCircle size={16} />}
+            onClick={() => setFlavors(flavors.filter((_, i) => i !== idx))}
+          >
+            Remove
+          </AdminButton>
+        </div>
+      </div>
+    </AdminCard>
+  );
+}
+
+function SizeEditor({
+  idx,
+  size,
+  sizes,
+  setSizes,
   materials,
   ingredients,
 }: {
   idx: number;
-  variant: VariantInput;
-  variants: VariantInput[];
-  setVariants: React.Dispatch<React.SetStateAction<VariantInput[]>>;
+  size: SizeInput;
+  sizes: SizeInput[];
+  setSizes: React.Dispatch<React.SetStateAction<SizeInput[]>>;
   materials: Material[];
   ingredients: Ingredient[];
 }) {
-  const update = (v: VariantInput) =>
-    setVariants(variants.map((x, i) => (i === idx ? v : x)));
+  const update = (s: SizeInput) =>
+    setSizes(sizes.map((x, i) => (i === idx ? s : x)));
 
   return (
-    <div className="border border-zinc-300 rounded-md p-4 bg-gray-50 space-y-4">
-      <div className="flex items-center gap-2">
-        <CustomSelect<VariantName>
-          value={variant.name}
-          options={allVariantOptions
+    <AdminCard className="bg-gradient-to-br from-gray-50 to-white border-gray-200">
+      <div className="flex items-center gap-4 mb-6">
+        <AdminSelect
+          label="Size"
+          value={size.name}
+          onChange={(e) => update({ ...size, name: e.target.value as SizeName })}
+          options={allSizeOptions
             .filter(
               (opt) =>
-                opt === variant.name || !variants.some((v) => v.name === opt)
+                opt === size.name || !sizes.some((s) => s.name === opt)
             )
             .map((opt) => ({ label: opt, value: opt }))}
-          onChange={(val) => update({ ...variant, name: val })}
-          className="w-36"
+          fullWidth={false}
+          className="w-40"
         />
 
-        <input
+        <AdminInput
           type="number"
-          className="border border-zinc-300 p-1 w-24 rounded-md"
-          value={variant.price}
+          label="Price (₱)"
+          value={size.price}
           onChange={(e) =>
-            update({ ...variant, price: parseFloat(e.target.value) })
+            update({ ...size, price: parseFloat(e.target.value) || 0 })
           }
+          fullWidth={false}
+          className="w-32"
         />
-        <button
-          onClick={() => setVariants(variants.filter((_, i) => i !== idx))}
-        >
-          <XCircle size={20} className="text-red-600" />
-        </button>
+
+        <div className="mt-6">
+          <AdminButton
+            size="sm"
+            variant="danger"
+            icon={<XCircle size={16} />}
+            onClick={() => setSizes(sizes.filter((_, i) => i !== idx))}
+          >
+            Remove
+          </AdminButton>
+        </div>
       </div>
 
-      <NestedSelectors
-        title="Materials"
-        items={variant.materials}
-        all={materials}
-        onChange={(items) => update({ ...variant, materials: items })}
-      />
-      <NestedSelectors
-        title="Ingredients"
-        items={variant.ingredients}
-        all={ingredients}
-        onChange={(items) => update({ ...variant, ingredients: items })}
-      />
-    </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <NestedSelectors
+          title="Materials"
+          items={size.materials}
+          all={materials}
+          onChange={(items) => update({ ...size, materials: items })}
+        />
+        <NestedSelectors
+          title="Ingredients"
+          items={size.ingredients}
+          all={ingredients}
+          onChange={(items) => update({ ...size, ingredients: items })}
+        />
+      </div>
+    </AdminCard>
   );
 }
 
@@ -273,111 +471,55 @@ function NestedSelectors<T extends { id: string; name: string }>({
   onChange: (items: { id: string; quantity: number }[]) => void;
 }) {
   return (
-    <div className="space-y-2">
-      <h3 className="font-medium">{title}</h3>
-      <CustomSelect<string>
-        value=""
-        options={all
-          .filter((x) => !items.some((it) => it.id === x.id))
-          .map((x) => ({ label: x.name, value: x.id }))}
-        onChange={(id) => onChange([...items, { id, quantity: 1 }])}
-        placeholder={`+ Add ${title.slice(0, -1)}`}
-        className="w-full"
-      />
+    <div className="space-y-4">
+      <div>
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">{title}</h4>
+        <AdminSelect
+          placeholder={`+ Add ${title.slice(0, -1)}`}
+          value=""
+          onChange={(e) => {
+            if (e.target.value) {
+              onChange([...items, { id: e.target.value, quantity: 1 }]);
+            }
+          }}
+          options={all
+            .filter((x) => !items.some((it) => it.id === x.id))
+            .map((x) => ({ label: x.name, value: x.id }))}
+        />
+      </div>
 
-      {items.map((it, i) => {
-        const found = all.find((x) => x.id === it.id);
-        return (
-          <div key={it.id} className="flex items-center gap-2">
-            <span className="w-32 text-sm">{found?.name || "Unknown"}</span>
-            <input
-              type="number"
-              className="border border-zinc-300 p-1 w-20 rounded-md"
-              value={it.quantity}
-              onChange={(e) => {
-                const arr = [...items];
-                arr[i].quantity = parseFloat(e.target.value);
-                onChange(arr);
-              }}
-            />
-            <button className="text-red-600">
-              <XCircle size={16} />
-            </button>
-          </div>
-        );
-      })}
+      {items.length > 0 && (
+        <div className="space-y-2">
+          {items.map((it, i) => {
+            const found = all.find((x) => x.id === it.id);
+            return (
+              <div key={it.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
+                <span className="flex-1 text-sm font-medium text-gray-900">
+                  {found?.name || "Unknown"}
+                </span>
+                <AdminInput
+                  type="number"
+                  value={it.quantity}
+                  onChange={(e) => {
+                    const arr = [...items];
+                    arr[i].quantity = parseFloat(e.target.value) || 0;
+                    onChange(arr);
+                  }}
+                  fullWidth={false}
+                  className="w-20"
+                />
+                <AdminButton
+                  size="sm"
+                  variant="danger"
+                  icon={<XCircle size={14} />}
+                  onClick={() => onChange(items.filter((_, idx) => idx !== i))}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function ProductTable({
-  products,
-  materials,
-  ingredients,
-  onEdit,
-  onDelete,
-}: {
-  products: Product[];
-  materials: Material[];
-  ingredients: Ingredient[];
-  onEdit: (p: Product) => void;
-  onDelete: (id: string) => void;
-}) {
-  return (
-    <table className="w-full mt-6 border border-zinc-300 text-sm bg-white rounded-md overflow-hidden">
-      <thead>
-        <tr className="text-left ">
-          <th className="p-2 border border-zinc-300">Name</th>
-          <th className="p-2 border border-zinc-300">Category</th>
-          <th className="p-2 border border-zinc-300">Variants</th>
-          <th className="p-2 border border-zinc-300">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {products.map((p) => (
-          <tr key={p.id} className="">
-            <td className="p-2 border border-zinc-300">{p.name}</td>
-            <td className="p-2 border border-zinc-300">{p.category}</td>
-            <td className="p-2 border border-zinc-300">
-              {p.variants.map((v, i) => (
-                <div
-                  key={v.id}
-                  className={`${
-                    i + 1 !== p.variants.length &&
-                    "border-b pb-2 border-zinc-200"
-                  } mb-2`}
-                >
-                  <strong>{v.name}</strong> - ₱{v.price.toFixed(2)}
-                  <div className="text-xs text-gray-600">Materials:</div>
-                  {v.materials.map((m, i) => (
-                    <div key={i} className="text-xs ml-2">
-                      {materials.find((x) => x.id === m.material.id)?.name ||
-                        "Unknown"}{" "}
-                      ({m.quantityUsed})
-                    </div>
-                  ))}
-                  <div className="text-xs text-gray-600">Ingredients:</div>
-                  {v.ingredients.map((ing, i) => (
-                    <div key={i} className="text-xs ml-2">
-                      {ingredients.find((x) => x.id === ing.ingredient.id)
-                        ?.name || "Unknown"}{" "}
-                      ({ing.quantityUsed})
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </td>
-            <td className="p-2 border border-zinc-300 space-x-2">
-              <button className="text-blue-600" onClick={() => onEdit(p)}>
-                <Pencil size={16} />
-              </button>
-              <button className="text-red-600" onClick={() => onDelete(p.id)}>
-                <Trash size={16} />
-              </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}

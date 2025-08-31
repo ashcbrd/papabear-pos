@@ -26,7 +26,8 @@ import {
   Clock,
   LayoutDashboard,
 } from "lucide-react";
-import CustomSelect from "@/components/custom-select"; // Make sure the path is correct
+import CustomSelect from "@/components/custom-select";
+import { useData } from "@/lib/data-context";
 
 type DateFilter = "all" | "month" | "today" | "range" | "custom";
 
@@ -49,6 +50,7 @@ interface DailyEntry {
 }
 
 export default function AdminDashboardPage() {
+  const { getDashboardStats } = useData();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [monthlyData, setMonthlyData] = useState<
     { month: string; total: number }[]
@@ -76,25 +78,30 @@ export default function AdminDashboardPage() {
   ];
 
   const loadData = async () => {
-    const params = new URLSearchParams({ filter });
+    try {
+      const filters: any = { filter };
 
-    if (filter === "range" && startDate && endDate) {
-      params.append("start", startDate.toISOString());
-      params.append("end", endDate.toISOString());
+      if (filter === "range" && startDate && endDate) {
+        filters.start = startDate.toISOString();
+        filters.end = endDate.toISOString();
+      }
+
+      if (filter === "custom" && startDate) {
+        filters.date = startDate.toISOString();
+      }
+
+      const data = await getDashboardStats(filters);
+      
+      if (data) {
+        setStats(data.stats);
+        setMonthlyData(data.monthly || []);
+        setProductData(data.products || []);
+        setHourData(data.hours || []);
+        setAllTimeDailyData(data.all_time_daily || []);
+      }
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
     }
-
-    if (filter === "custom" && startDate) {
-      params.append("date", startDate.toISOString());
-    }
-
-    const res = await fetch(`/api/dashboard?${params.toString()}`);
-    const json = await res.json();
-
-    setStats(json.stats);
-    setMonthlyData(json.monthly);
-    setProductData(json.products);
-    setHourData(json.hours || []);
-    setAllTimeDailyData(json.all_time_daily || []);
   };
 
   useEffect(() => {

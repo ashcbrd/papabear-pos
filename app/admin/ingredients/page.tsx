@@ -3,6 +3,17 @@
 import { useEffect, useState } from "react";
 import { IngredientInput, IngredientWithStock } from "@/lib/types";
 import { Pencil, Soup, Trash } from "lucide-react";
+import { useData } from "@/lib/data-context";
+import {
+  AdminPageHeader,
+  AdminFormSection,
+  AdminInput,
+  AdminSelect,
+  AdminButton,
+  AdminTable,
+  AdminActions,
+  AdminCard
+} from "@/components/admin";
 
 const measurementUnits = [
   "kg",
@@ -17,7 +28,7 @@ const measurementUnits = [
 ];
 
 export default function IngredientsAdminPage() {
-  const [ingredients, setIngredients] = useState<IngredientWithStock[]>([]);
+  const { ingredients, createIngredient, updateIngredient, deleteIngredient } = useData();
   const [name, setName] = useState("");
   const [measurementUnit, setMeasurementUnit] = useState("piece");
   const [unitsPerPurchase, setUnitsPerPurchase] = useState<number>(1);
@@ -30,9 +41,6 @@ export default function IngredientsAdminPage() {
     Partial<IngredientInput & { pricePerUnit: number }>
   >({});
 
-  useEffect(() => {
-    fetchIngredients();
-  }, []);
 
   useEffect(() => {
     if (unitsPerPurchase > 0) {
@@ -40,38 +48,39 @@ export default function IngredientsAdminPage() {
     }
   }, [pricePerPurchase, unitsPerPurchase]);
 
-  const fetchIngredients = async () => {
-    const res = await fetch("/api/ingredients");
-    setIngredients(await res.json());
-  };
 
-  const createIngredient = async () => {
-    const payload: IngredientInput = {
-      name,
-      measurementUnit,
-      unitsPerPurchase,
-      pricePerPurchase,
-      stockQuantity,
-    };
+  const handleCreateIngredient = async () => {
+    try {
+      const payload: IngredientInput = {
+        name,
+        measurementUnit,
+        unitsPerPurchase,
+        pricePerPurchase,
+        stockQuantity,
+      };
 
-    await fetch("/api/ingredients", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+      await createIngredient(payload);
 
-    setName("");
-    setMeasurementUnit("piece");
-    setUnitsPerPurchase(1);
-    setPricePerPurchase(0);
-    setPricePerUnit(0);
-    setStockQuantity(0);
-    fetchIngredients();
+      setName("");
+      setMeasurementUnit("piece");
+      setUnitsPerPurchase(1);
+      setPricePerPurchase(0);
+      setPricePerUnit(0);
+      setStockQuantity(0);
+    } catch (error) {
+      console.error("Failed to create ingredient:", error);
+      alert("Failed to create ingredient");
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/ingredients/${id}`, { method: "DELETE" });
-    fetchIngredients();
+    if (!confirm("Are you sure you want to delete this ingredient?")) return;
+    try {
+      await deleteIngredient(id);
+    } catch (error) {
+      console.error("Failed to delete ingredient:", error);
+      alert("Failed to delete ingredient");
+    }
   };
 
   const handleEditChange = (
@@ -90,15 +99,14 @@ export default function IngredientsAdminPage() {
   const saveEdit = async () => {
     if (!editingId) return;
 
-    await fetch(`/api/ingredients/${editingId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editForm),
-    });
-
-    setEditingId(null);
-    setEditForm({});
-    fetchIngredients();
+    try {
+      await updateIngredient(editingId, editForm);
+      setEditingId(null);
+      setEditForm({});
+    } catch (error) {
+      console.error("Failed to update ingredient:", error);
+      alert("Failed to update ingredient");
+    }
   };
 
   return (
@@ -173,7 +181,7 @@ export default function IngredientsAdminPage() {
           </button>
 
           <button
-            onClick={createIngredient}
+            onClick={handleCreateIngredient}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
           >
             Create Ingredient

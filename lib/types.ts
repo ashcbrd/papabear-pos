@@ -3,20 +3,26 @@ import {
   Ingredient,
   Material,
   Product,
-  Variant,
+  Flavor,
+  Size,
   Stock,
   Category,
 } from "@prisma/client";
 
-// 🔗 Linked Materials per variant
+// 🔗 Linked Materials per size
 export type LinkedMaterial = {
   materialId: string;
   amount: number;
   unit: string;
 };
 
-// Variants
-export type VariantInput = {
+// Flavors
+export type FlavorInput = {
+  name: string;
+};
+
+// Sizes
+export type SizeInput = {
   name: string;
   price: number;
   linkedMaterials?: LinkedMaterial[]; // ← NEW: optional list of used materials
@@ -26,15 +32,17 @@ export type VariantInput = {
 export type ProductInput = {
   name: string;
   category: Category;
-  variants: { name: string; price: number }[];
+  flavors: { name: string }[];
+  sizes: { name: string; price: number }[];
   imageUrl?: string;
   materials: { materialId: string; quantity: number }[];
   ingredients: { ingredientId: string; amount: number }[];
   // (other properties, if any)
 };
 
-export type ProductWithVariants = Product & {
-  variants: Variant[];
+export type ProductWithFlavorsAndSizes = Product & {
+  flavors: Flavor[];
+  sizes: Size[];
   imageUrl?: string;
 };
 
@@ -69,6 +77,7 @@ export type IngredientInput = {
   measurementUnit: string;
   unitsPerPurchase?: number;
   pricePerPurchase: number;
+  pricePerUnit?: number;
   stockQuantity?: number;
 };
 

@@ -2,18 +2,11 @@
 "use client";
 
 import { JSX, useCallback, useEffect, useState } from "react";
-import {
-  Category,
-  Variant,
-  Addon,
-  Product as ProductType,
-  Order,
-  OrderType,
-} from "@prisma/client";
-import { Plus, Minus, Trash } from "lucide-react";
+import { Plus, Minus, Trash, Check } from "lucide-react";
 import OrderConfirmationDialog from "@/components/order-confirmation-dialog";
 import CustomSelect from "@/components/custom-select";
 import { useToast } from "@/components/toast-context";
+import { useData } from "@/lib/data-context";
 import {
   LayoutGrid,
   Utensils,
@@ -22,8 +15,46 @@ import {
   ChevronLeft,
   X,
 } from "lucide-react";
+import LongPressServeButton from "@/components/long-press-serve-button";
 
-type ProductWithVariants = ProductType & { variants: Variant[] };
+// Type definitions
+type Category = "InsideMeals" | "OutsideSnacks" | "InsideBeverages";
+type OrderType = "DINE_IN" | "TAKE_OUT";
+
+interface Flavor {
+  id: string;
+  name: string;
+}
+
+interface Size {
+  id: string;
+  name: string;
+  price: number;
+}
+
+interface Addon {
+  id: string;
+  name: string;
+  price: number;
+}
+
+interface ProductType {
+  id: string;
+  name: string;
+  category: Category;
+  imageUrl?: string;
+}
+
+interface Order {
+  id: string;
+  orderType: OrderType;
+  orderStatus: string;
+}
+
+type ProductWithFlavorsAndSizes = ProductType & {
+  flavors: Flavor[];
+  sizes: Size[];
+};
 
 type OrderAddon = {
   addon: Addon;
@@ -31,8 +62,9 @@ type OrderAddon = {
 };
 
 type OrderItem = {
-  product: ProductWithVariants;
-  variant: Variant;
+  product: ProductWithFlavorsAndSizes;
+  flavor: Flavor;
+  size: Size;
   quantity: number;
   addons: OrderAddon[];
 };
@@ -40,16 +72,22 @@ type OrderItem = {
 type QueuedOrder = Order & {
   items: {
     product: ProductType;
-    variant: Variant;
+    flavor: Flavor;
+    size: Size;
     quantity: number;
     addons: { addon: Addon; quantity: number }[];
   }[];
 };
 
 export default function POSPage() {
-  const [products, setProducts] = useState<ProductWithVariants[]>([]);
-  const [addons, setAddons] = useState<Addon[]>([]);
-  const [orders, setOrders] = useState<QueuedOrder[]>([]);
+  const {
+    products,
+    addons,
+    orders: allOrders,
+    loadOrders,
+    createOrder,
+    updateOrder,
+  } = useData();
   const [selectedCategory, setSelectedCategory] = useState<Category | "All">(
     "All"
   );
@@ -59,6 +97,12 @@ export default function POSPage() {
   const [orderType, setOrderType] = useState("");
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // New state for product selection flow
+  const [selectedProduct, setSelectedProduct] =
+    useState<ProductWithFlavorsAndSizes | null>(null);
+  const [selectedFlavor, setSelectedFlavor] = useState<Flavor | null>(null);
+  const [selectedSize, setSelectedSize] = useState<Size | null>(null);
 
   const categories: (Category | "All")[] = [
     "All",
@@ -71,6 +115,9 @@ export default function POSPage() {
 
   const { showToast } = useToast();
 
+  // Filter orders to show only queuing ones for the current order type
+  const orders = allOrders.filter((o: any) => o.orderStatus === "QUEUING");
+
   const categoryIcons: Record<string, JSX.Element> = {
     All: <LayoutGrid size={18} className="shrink-0 text-green-800" />,
     InsideMeals: <Utensils size={18} className="shrink-0 text-green-800" />,
@@ -79,24 +126,63 @@ export default function POSPage() {
   };
 
   useEffect(() => {
-    fetch("/api/products")
-      .then((res) => res.json())
-      .then(setProducts);
-    fetch("/api/addons")
-      .then((res) => res.json())
-      .then(setAddons);
-    fetchOrders();
-  }, []);
+    if (orderType) {
+      loadOrders();
+    }
+  }, [orderType, loadOrders]);
 
-  const fetchOrders = async () => {
-    const res = await fetch("/api/orders");
-    const data = await res.json();
-    setOrders(data.filter((o: Order) => o.orderStatus === "QUEUING"));
+  useEffect(() => {
+    console.log("Products loaded:", products);
+  }, [products]);
+
+  useEffect(() => {
+    console.log("Order type changed:", orderType);
+  }, [orderType]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest(".product-selection-dropdown")) {
+        setSelectedProduct(null);
+        setSelectedFlavor(null);
+        setSelectedSize(null);
+      }
+    };
+
+    if (selectedProduct) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [selectedProduct]);
+
+  const handleProductClick = (product: ProductWithFlavorsAndSizes) => {
+    console.log("Product clicked:", product);
+    console.log("Product has flavors:", product.flavors);
+    console.log("Product has sizes:", product.sizes);
+    setSelectedProduct(product);
+    setSelectedFlavor(null);
+    setSelectedSize(null);
   };
 
-  const addProductToOrder = (product: ProductWithVariants) => {
+  const handleFlavorSelect = (flavor: Flavor) => {
+    setSelectedFlavor(flavor);
+    setSelectedSize(null);
+  };
+
+  const handleSizeSelect = (size: Size) => {
+    setSelectedSize(size);
+  };
+
+  const addToCart = () => {
+    if (!selectedProduct || !selectedFlavor || !selectedSize) return;
+
     const existingIndex = orderItems.findIndex(
-      (item) => item.product.id === product.id
+      (item) =>
+        item.product.id === selectedProduct.id &&
+        item.flavor.id === selectedFlavor.id &&
+        item.size.id === selectedSize.id
     );
 
     if (existingIndex !== -1) {
@@ -104,20 +190,28 @@ export default function POSPage() {
       updated[existingIndex].quantity += 1;
       setOrderItems(updated);
     } else {
-      const defaultVariant =
-        product.variants.find((v) => v.name === "general") ||
-        product.variants[0];
-
       setOrderItems([
         ...orderItems,
         {
-          product,
-          variant: defaultVariant,
+          product: selectedProduct,
+          flavor: selectedFlavor,
+          size: selectedSize,
           quantity: 1,
           addons: [],
         },
       ]);
     }
+
+    // Reset selection
+    setSelectedProduct(null);
+    setSelectedFlavor(null);
+    setSelectedSize(null);
+  };
+
+  const cancelSelection = () => {
+    setSelectedProduct(null);
+    setSelectedFlavor(null);
+    setSelectedSize(null);
   };
 
   const updateItemQuantity = (index: number, change: number) => {
@@ -132,13 +226,20 @@ export default function POSPage() {
     setOrderItems(items);
   };
 
-  const updateVariant = (index: number, variantId: string) => {
+  const updateFlavor = (index: number, flavorId: string) => {
     const items = [...orderItems];
-    const variant = items[index].product.variants.find(
-      (v) => v.id === variantId
-    );
-    if (variant) {
-      items[index].variant = variant;
+    const flavor = items[index].product.flavors.find((f) => f.id === flavorId);
+    if (flavor) {
+      items[index].flavor = flavor;
+      setOrderItems(items);
+    }
+  };
+
+  const updateSize = (index: number, sizeId: string) => {
+    const items = [...orderItems];
+    const size = items[index].product.sizes.find((s) => s.id === sizeId);
+    if (size) {
+      items[index].size = size;
       setOrderItems(items);
     }
   };
@@ -169,7 +270,7 @@ export default function POSPage() {
 
   const calculateTotal = () => {
     return orderItems.reduce((total, item) => {
-      const productTotal = item.variant.price * item.quantity;
+      const productTotal = item.size.price * item.quantity;
       const addonTotal = item.addons.reduce(
         (sum, a) => sum + a.addon.price * a.quantity,
         0
@@ -204,57 +305,60 @@ export default function POSPage() {
   }, []);
 
   const handleConfirmOrder = async () => {
-    const payload = {
-      items: orderItems.map((item) => ({
-        productId: item.product.id,
-        variantId: item.variant.id,
-        quantity: item.quantity,
-        addons: item.addons.map((a) => ({
-          id: a.addon.id,
-          quantity: a.quantity,
+    try {
+      const orderData = {
+        items: orderItems.map((item) => ({
+          product: item.product,
+          flavor: item.flavor,
+          size: item.size,
+          quantity: item.quantity,
+          status: "QUEUING",
+          addons: item.addons.map((a) => ({
+            addon: a.addon,
+            quantity: a.quantity,
+          })),
         })),
-      })),
-      total: calculateTotal(),
-      paid: parseFloat(payment || "0"),
-      change: parseFloat(payment || "0") - calculateTotal(),
-      orderType,
-    };
+        total: calculateTotal(),
+        paid: parseFloat(payment || "0"),
+        change: parseFloat(payment || "0") - calculateTotal(),
+        orderType,
+      };
 
-    const url = editingOrderId
-      ? `/api/orders/${editingOrderId}`
-      : "/api/orders";
-    const method = editingOrderId ? "PATCH" : "POST";
+      if (editingOrderId) {
+        await updateOrder(editingOrderId, orderData);
+        showToast("Order updated.", "success");
+      } else {
+        await createOrder(orderData);
+        showToast("Order placed.", "success");
+      }
 
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (res.ok) {
       setOrderItems([]);
       setPayment("");
       setShowDialog(false);
       setEditingOrderId(null);
-      fetchOrders();
-
       setIsOrderPanelVisible(false);
-      showToast(editingOrderId ? "Order updated." : "Order placed.", "success");
-    }
+      
+      // Refresh orders list
+      await loadOrders();
 
-    setTimeout(() => {
-      setOrderType("");
-    }, 2000);
+      setTimeout(() => {
+        setOrderType("");
+      }, 2000);
+    } catch (error) {
+      showToast("Failed to process order.", "error");
+      console.error("Order error:", error);
+    }
   };
 
   const handleServe = async (id: string) => {
-    await fetch(`/api/orders/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderStatus: "SERVED" }),
-    });
-    fetchOrders();
-    showToast("Order served successfully.", "success");
+    try {
+      await updateOrder(id, { orderStatus: "SERVED" });
+      await loadOrders(); // Refresh orders list
+      showToast("Order served successfully.", "success");
+    } catch (error) {
+      showToast("Failed to serve order.", "error");
+      console.error("Serve order error:", error);
+    }
   };
 
   // const handleDelete = async (id: string) => {
@@ -361,9 +465,9 @@ export default function POSPage() {
         <div className="p-4 flex gap-4 relative">
           <button
             onClick={() => setIsOrderPanelVisible(true)}
-            className="absolute top-10 right-0 py-4 px-6 shadow-md rounded-l-md border border-zinc-300 bg-red-500"
+            className="absolute top-10 right-0 py-4 px-6 shadow-lg rounded-l-xl border border-red-300 bg-gradient-to-l from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 transition-all duration-200 z-40"
           >
-            <ChevronLeft color="white" />
+            <ChevronLeft color="white" size={20} />
           </button>
           <div
             className={`
@@ -372,68 +476,8 @@ export default function POSPage() {
 
   `}
           >
-            <div className="col-span-12 border rounded-md border-zinc-300">
-              <h2 className="text-xl font-semibold p-3 border-b border-zinc-300">
-                Queuing Orders
-              </h2>
-              <div className="flex gap-4 overflow-x-auto pb-2 p-3 bg-zinc-100 min-h-[160px]">
-                {orders.length > 0 ? (
-                  orders.map((order) => (
-                    <div
-                      key={order.id}
-                      className="border border-zinc-300 rounded-md w-60 bg-white h-max"
-                    >
-                      <div className="mb-1 px-3 py-1 border-b border-zinc-300 flex items-center justify-between">
-                        #{order.id.slice(0, 6)}{" "}
-                        <div className="text-xs text-zinc-500">
-                          {formatOrderType(order.orderType)}
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-10 p-3">
-                        <div className="font-medium flex flex-col gap-4">
-                          {order.items.map((item) => (
-                            <div key={item.variant.id}>
-                              {item.product.name} ({item.variant.name}) x
-                              {item.quantity}
-                              {item.addons.length > 0 && (
-                                <ul className="text-xs mt-1 font-normal flex gap-1 flex-wrap">
-                                  {item.addons.map((a) => (
-                                    <li
-                                      key={a.addon.id}
-                                      className="bg-zinc-200 w-max px-2 py-1 rounded-md"
-                                    >
-                                      {a.addon.name} x{a.quantity}
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex justify-between gap-1">
-                          <button
-                            onClick={() => handleServe(order.id)}
-                            className="border border-zinc-200 text-white w-full bg-green-800 px-6 py-2 rounded-lg font-semibold text-lg"
-                          >
-                            Serve
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="w-full flex flex-col items-center justify-center text-center text-zinc-500 py-10 mx-auto">
-                    <p className="text-lg font-medium">No queuing orders</p>
-                    <p className="text-sm text-zinc-400">
-                      Orders will appear here once added.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Product List */}
-            <div className="col-span-8 space-y-4">
+            <div className="col-span-8 space-y-4 min-h-screen">
               <div className="flex flex-col mb-4 w-max">
                 {/* Category Buttons */}
                 <div className="flex gap-2 p-1 rounded-xl border border-zinc-300 bg-gray-100 mb-4">
@@ -465,23 +509,117 @@ export default function POSPage() {
                 />
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 h-full">
                 {filteredProducts.length > 0 ? (
                   filteredProducts.map((product) => (
-                    <button
-                      key={product.id}
-                      onClick={() => addProductToOrder(product)}
-                      className="border border-zinc-300 rounded-md p-2 hover:bg-gray-100 w-[200px]"
-                    >
-                      <img
-                        src={product.imageUrl || "/placeholder.jpg"}
-                        alt={product.name}
-                        className="w-full h-40 object-cover rounded"
-                      />
-                      <div className="text-center mt-2 font-medium">
-                        {product.name}
-                      </div>
-                    </button>
+                    <div key={product.id} className="relative  h-max">
+                      <button
+                        onClick={() => handleProductClick(product)}
+                        className={`border border-zinc-300 rounded-md p-2 hover:bg-gray-100 w-[200px] ${
+                          selectedProduct?.id === product.id
+                            ? "ring-2 ring-blue-500 bg-blue-50"
+                            : ""
+                        }`}
+                      >
+                        <img
+                          src={product.imageUrl || "/placeholder.jpg"}
+                          alt={product.name}
+                          className="w-full h-40 object-cover rounded"
+                        />
+                        <div className="text-center mt-2 font-medium">
+                          {product.name}
+                        </div>
+                      </button>
+
+                      {/* Flavor Selection Dropdown */}
+                      {selectedProduct?.id === product.id && (
+                        <div className="product-selection-dropdown absolute top-full left-0 w-full bg-white border border-gray-300 rounded-md shadow-lg z-10 p-4 mt-1">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Choose Flavor:
+                              </label>
+                              {product.flavors && product.flavors.length > 0 ? (
+                                <select
+                                  value={selectedFlavor?.id || ""}
+                                  onChange={(e) => {
+                                    const flavor = product.flavors?.find(
+                                      (f) => f.id === e.target.value
+                                    );
+                                    if (flavor) handleFlavorSelect(flavor);
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                  <option value="">Select a flavor...</option>
+                                  {product.flavors.map((flavor) => (
+                                    <option key={flavor.id} value={flavor.id}>
+                                      {flavor.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <div className="text-red-500 text-sm">
+                                  No flavors available for this product
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Size Selection Buttons */}
+                            {selectedFlavor && (
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Choose Size:
+                                </label>
+                                {product.sizes && product.sizes.length > 0 ? (
+                                  <div className="grid grid-cols-1 gap-2">
+                                    {product.sizes.map((size) => (
+                                      <button
+                                        key={size.id}
+                                        onClick={() => handleSizeSelect(size)}
+                                        className={`px-3 py-2 rounded border text-center ${
+                                          selectedSize?.id === size.id
+                                            ? "bg-green-100 border-green-300 text-green-800"
+                                            : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                                        }`}
+                                      >
+                                        <div className="font-medium">
+                                          {size.name}
+                                        </div>
+                                        <div className="text-sm">
+                                          ₱{size.price.toFixed(2)}
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-red-500 text-sm">
+                                    No sizes available for this product
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Action Buttons */}
+                            {selectedSize && (
+                              <div className="flex gap-2 pt-2 border-t">
+                                <button
+                                  onClick={cancelSelection}
+                                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={addToCart}
+                                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ))
                 ) : (
                   <div className="text-center w-full text-zinc-500 p-10 col-span-full">
@@ -508,9 +646,9 @@ export default function POSPage() {
           >
             <button
               onClick={() => setIsOrderPanelVisible(false)}
-              className="absolute z-[99] right-6 top-6 p-4 border rounded-md bg-red-500 border-zinc-300"
+              className="absolute z-[99] right-6 top-6 p-3 rounded-xl bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 border border-red-300 shadow-lg transition-all duration-200"
             >
-              <X color="white" />
+              <X color="white" size={18} />
             </button>
             <div className="flex flex-col">
               <div className="border border-b-0 rounded-t-md p-3 space-y-3 bg-white border-gray-300 overflow-y-auto h-[600px] relative">
@@ -524,21 +662,48 @@ export default function POSPage() {
                         key={index}
                         className="border p-3 bg-gray-50 rounded-md border-zinc-300 pb-2"
                       >
-                        <div className="flex justify-between">
-                          <strong>{item.product.name}</strong>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <strong className="text-base">
+                              {item.product?.name || 'Unknown Product'}
+                            </strong>
+                            <div className="flex gap-2 mt-1">
+                              <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                {item.flavor?.name || 'Unknown Flavor'}
+                              </span>
+                              <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                                {item.size?.name || 'Unknown Size'} - ₱{item.size?.price?.toFixed(2) || '0.00'}
+                              </span>
+                            </div>
+                          </div>
                           <button onClick={() => removeItem(index)}>
                             <Trash size={16} className="text-red-600" />
                           </button>
                         </div>
-                        <label className="text-sm">Variant:</label>
-                        <CustomSelect
-                          value={item.variant.id}
-                          onChange={(val) => updateVariant(index, val)}
-                          options={item.product.variants.map((v) => ({
-                            label: `${v.name} - ₱${v.price.toFixed(2)}`,
-                            value: v.id,
-                          }))}
-                        />
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-sm">Flavor:</label>
+                            <CustomSelect
+                              value={item.flavor.id}
+                              onChange={(val) => updateFlavor(index, val)}
+                              options={item.product.flavors.map((f) => ({
+                                label: f.name,
+                                value: f.id,
+                              }))}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm">Size:</label>
+                            <CustomSelect
+                              value={item.size.id}
+                              onChange={(val) => updateSize(index, val)}
+                              options={item.product.sizes.map((s) => ({
+                                label: `${s.name} - ₱${s.price.toFixed(2)}`,
+                                value: s.id,
+                              }))}
+                            />
+                          </div>
+                        </div>
 
                         <div className="flex items-center gap-2 mt-2">
                           <button
@@ -574,7 +739,7 @@ export default function POSPage() {
                                 key={a.addon.id}
                                 className="flex justify-between items-center"
                               >
-                                {a.addon.name} - ₱{a.addon.price}
+                                {a.addon?.name || 'Unknown Addon'} - ₱{a.addon?.price || 0}
                                 <div className="flex gap-1 items-center">
                                   <button
                                     className="p-1 border bg-white border-zinc-300 rounded-md"
@@ -797,14 +962,15 @@ export default function POSPage() {
               {orderItems.map((item, index) => (
                 <div key={index}>
                   <strong>
-                    {item.product.name} ({item.variant.name}) x{item.quantity}
+                    {item.product?.name || 'Unknown Product'} ({item.flavor?.name || 'Unknown Flavor'} - {item.size?.name || 'Unknown Size'})
+                    x{item.quantity}
                   </strong>
                   <ul className="ml-4 list-disc">
-                    {item.addons.map((a) => (
-                      <li key={a.addon.id}>
-                        {a.addon.name} ₱{a.addon.price} x{a.quantity}
+                    {item.addons?.map((a) => (
+                      <li key={a.addon?.id || index}>
+                        {a.addon?.name || 'Unknown Addon'} ₱{a.addon?.price || 0} x{a.quantity}
                       </li>
-                    ))}
+                    )) || []}
                   </ul>
                 </div>
               ))}
@@ -838,22 +1004,137 @@ export default function POSPage() {
           </OrderConfirmationDialog>
         </div>
       ) : (
-        <div className="w-full h-screen bg-yellow-100 flex flex-col items-center justify-center gap-y-[100px] -mt-[200px]">
-          <h2 className="text-center text-[56px] font-bold">
-            Welcome to Papa Bear Cafe!
-          </h2>
-          <div className="flex gap-x-10">
+        <div className="w-full p-10 h-screen flex flex-col items-center justify-center gap-16 -mt-32">
+          <div className="col-span-12 w-full border rounded-md border-zinc-300">
+            <div className="p-4 border-b border-zinc-300 flex items-center justify-between">
+              <h2 className="text-xl font-semibold flex items-center gap-3">
+                Queing Orders
+              </h2>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto pb-2 p-3 bg-zinc-100 min-h-[160px]">
+              {orders.length > 0 ? (
+                orders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="border border-zinc-300 rounded-lg w-64 bg-white shadow-sm hover:shadow-md transition-shadow duration-200 h-max"
+                  >
+                    <div className="mb-1 px-4 py-3 border-b border-zinc-300 flex items-center justify-between">
+                      <span className="font-semibold text-gray-700">
+                        #{order.id.slice(0, 6)}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-10 p-3">
+                      <div className="font-medium flex flex-col gap-4">
+                        {order.items?.map((item, index) => (
+                          <div key={index}>
+                            {item.product?.name || 'Unknown Product'} ({item.flavor?.name || 'Unknown Flavor'} -{" "}
+                            {item.size?.name || 'Unknown Size'}) x{item.quantity}
+                            {item.addons?.length > 0 && (
+                              <ul className="text-xs mt-1 font-normal flex gap-1 flex-wrap">
+                                {item.addons.map((a) => (
+                                  <li
+                                    key={a.addon?.id || index}
+                                    className="bg-zinc-200 w-max px-2 py-1 rounded-md"
+                                  >
+                                    {a.addon?.name || 'Unknown Addon'} x{a.quantity}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )) || []}
+                      </div>
+
+                      <div className="flex justify-between gap-1">
+                        <LongPressServeButton
+                          onConfirm={() => handleServe(order.id)}
+                          idleLabel="Mark as Served"
+                          confirmingLabel="Keep holding…"
+                          successLabel="Served!"
+                          holdMs={2000} // 2 seconds
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="w-full flex flex-col items-center justify-center text-center text-zinc-500 py-10 mx-auto">
+                  <div className="mb-3 p-3 rounded-full bg-zinc-100 text-zinc-600">
+                    📦
+                  </div>
+                  <p className="text-lg font-medium">No orders queuing</p>
+                  <p className="text-sm text-zinc-400">
+                    Orders will appear here once added.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="text-center space-y-6">
+            <h1 className="text-6xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+              Welcome to Papa Bear Cafe
+            </h1>
+            <p className="text-2xl text-gray-600 font-medium">
+              Choose your order type to get started
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-8">
+            {/* Dine In Button */}
             <button
-              onClick={() => setOrderType("DINE_IN")}
-              className="text-[40px] bg-green-500 rounded-lg px-10 py-8"
+              onClick={() => {
+                console.log("Dine In clicked");
+                setOrderType("DINE_IN");
+              }}
+              className="group relative overflow-hidden bg-green-500/10 w-[280px] rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-105 border border-gray-100"
             >
-              Dine In
+              <div className="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="relative z-10 flex flex-col items-center space-y-4">
+                <div className="bg-gradient-to-br from-green-500 to-emerald-600 group-hover:bg-white group-hover:bg-none p-4 rounded-xl transition-all duration-300">
+                  <Utensils
+                    size={48}
+                    className="text-white group-hover:text-green-600"
+                  />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-3xl font-bold text-gray-800 group-hover:text-white transition-colors duration-300">
+                    Dine In
+                  </h3>
+                  <p className="text-lg text-gray-500 group-hover:text-white/80 transition-colors duration-300 mt-2">
+                    Enjoy your meal here
+                  </p>
+                </div>
+              </div>
             </button>
+
+            {/* Take Out Button */}
             <button
-              onClick={() => setOrderType("TAKE_OUT")}
-              className="text-[40px] bg-green-500 rounded-lg px-10 py-8"
+              onClick={() => {
+                console.log("Take Out clicked");
+                setOrderType("TAKE_OUT");
+              }}
+              className="group relative overflow-hidden bg-orange-500/10 w-[280px] rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-105 border border-gray-100"
             >
-              Take Out
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-red-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="relative z-10 flex flex-col items-center space-y-4">
+                <div className="bg-gradient-to-br from-orange-500 to-red-500 group-hover:bg-white group-hover:bg-none p-4 rounded-xl transition-all duration-300">
+                  <Coffee
+                    size={48}
+                    className="text-white group-hover:text-orange-600"
+                  />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-3xl font-bold text-gray-800 group-hover:text-white transition-colors duration-300">
+                    Take Out
+                  </h3>
+                  <p className="text-lg text-gray-500 group-hover:text-white/80 transition-colors duration-300 mt-2">
+                    Order to go
+                  </p>
+                </div>
+              </div>
             </button>
           </div>
         </div>
