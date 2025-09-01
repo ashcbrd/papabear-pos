@@ -6,7 +6,7 @@ import { mockDataService } from './mock-data-service';
 import { initializeSampleData } from './seed-data';
 import LoadingScreen from '@/components/loading-screen';
 
-// Temporarily use mock service until android database is updated
+// Use mock service with localStorage persistence (works on Android WebView)
 const currentDataService = mockDataService;
 
 interface DataContextType {
@@ -45,8 +45,8 @@ interface DataContextType {
   
   // Orders
   loadOrders: (filters?: any) => Promise<void>;
-  createOrder: (order: any) => Promise<void>;
-  updateOrder: (id: string, updates: any) => Promise<void>;
+  createOrder: (order: any) => Promise<any>;
+  updateOrder: (id: string, updates: any) => Promise<any>;
   deleteOrder: (id: string) => Promise<void>;
   
   // Stock
@@ -61,6 +61,21 @@ interface DataContextType {
   
   // Dashboard
   getDashboardStats: (filters?: any) => Promise<any>;
+  
+  // Cash Flow
+  getCashFlowTransactions: (filters?: any) => Promise<any>;
+  getCashFlowSummary: (period?: 'today' | 'week' | 'month') => Promise<any>;
+  getCashDrawerBalance: () => Promise<any>;
+  recordCashInflow: (data: any) => Promise<any>;
+  recordCashOutflow: (data: any) => Promise<any>;
+  addCashDeposit: (amount: number, description: string) => Promise<any>;
+  recordExpense: (amount: number, description: string, itemsPurchased?: string) => Promise<any>;
+  recordRefund: (orderId: string, amount: number, reason: string) => Promise<any>;
+  setCashDrawerBalance: (newBalance: number, reason: string) => Promise<any>;
+  adjustCashDrawer: (adjustment: number, reason: string) => Promise<any>;
+  
+  // Direct access to current data service
+  currentDataService: any;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -83,10 +98,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('Starting data initialization...');
       
+      // Initialize data storage
+      console.log('Initializing data storage...');
+      
       // Load only essential data for POS functionality
       await loadProducts();
       await loadAddons();
       await loadOrders();
+      await loadFlavors(); // Add flavors loading
       
       // Set empty arrays for other data to avoid loading issues
       setIngredients([]);
@@ -259,47 +278,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const loadOrders = async (filters?: any) => {
-    try {
-      console.log('Loading orders from currentDataService...');
-      const data = await currentDataService.getOrders();
-      console.log('Orders loaded from service:', data);
-      setOrders(data);
-    } catch (error) {
-      console.error('Failed to load orders:', error);
-    }
-  };
-
-  const createOrder = async (order: any) => {
-    try {
-      const newOrder = await currentDataService.createOrder(order);
-      setOrders(prev => [newOrder, ...prev]);
-    } catch (error) {
-      console.error('Failed to create order:', error);
-      throw error;
-    }
-  };
-
-  const updateOrder = async (id: string, updates: any) => {
-    try {
-      const updatedOrder = await currentDataService.updateOrder(id, updates);
-      setOrders(prev => prev.map(order => order.id === id ? updatedOrder : order));
-    } catch (error) {
-      console.error('Failed to update order:', error);
-      throw error;
-    }
-  };
-
-  const deleteOrder = async (id: string) => {
-    try {
-      await currentDataService.deleteOrder(id);
-      setOrders(prev => prev.filter(o => o.id !== id));
-    } catch (error) {
-      console.error('Failed to delete order:', error);
-      throw error;
-    }
-  };
-
   const loadStock = async () => {
     try {
       const data = await currentDataService.getStock();
@@ -319,36 +297,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const getDashboardStats = async (filters?: any) => {
-    try {
-      return await currentDataService.getDashboardStats(filters);
-    } catch (error) {
-      console.error('Failed to get dashboard stats:', error);
-      return null;
-    }
-  };
-
   // Flavors CRUD operations
   const loadFlavors = async () => {
     try {
       console.log('Loading flavors...');
-      // For now, use static data
-      setFlavors([
-        { id: "1", name: "Original" },
-        { id: "2", name: "Chocolate" },
-        { id: "3", name: "Vanilla" },
-        { id: "4", name: "Strawberry" },
-        { id: "5", name: "Caramel" },
-        { id: "6", name: "Matcha" },
-      ]);
+      const data = await currentDataService.getFlavors();
+      setFlavors(data);
     } catch (error) {
       console.error('Failed to load flavors:', error);
+      // Fallback to empty array
+      setFlavors([]);
     }
   };
 
   const createFlavor = async (flavor: any) => {
     try {
-      const newFlavor = { id: Date.now().toString(), ...flavor };
+      const newFlavor = await currentDataService.createFlavor(flavor);
       setFlavors(prev => [newFlavor, ...prev]);
     } catch (error) {
       console.error('Failed to create flavor:', error);
@@ -358,7 +322,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updateFlavor = async (id: string, flavor: any) => {
     try {
-      setFlavors(prev => prev.map(f => f.id === id ? { ...f, ...flavor } : f));
+      const updatedFlavor = await currentDataService.updateFlavor(id, flavor);
+      setFlavors(prev => prev.map(f => f.id === id ? updatedFlavor : f));
     } catch (error) {
       console.error('Failed to update flavor:', error);
       throw error;
@@ -367,10 +332,68 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const deleteFlavor = async (id: string) => {
     try {
+      await currentDataService.deleteFlavor(id);
       setFlavors(prev => prev.filter(f => f.id !== id));
     } catch (error) {
       console.error('Failed to delete flavor:', error);
       throw error;
+    }
+  };
+
+  // Order management functions
+  const loadOrders = async (filters?: any) => {
+    try {
+      console.log('Loading orders...');
+      const data = await currentDataService.getOrders(filters);
+      setOrders(data);
+    } catch (error) {
+      console.error('Failed to load orders:', error);
+      setOrders([]);
+    }
+  };
+
+  const createOrder = async (order: any) => {
+    try {
+      console.log('Creating order:', order);
+      const newOrder = await currentDataService.createOrder(order);
+      setOrders(prev => [newOrder, ...prev]);
+      return newOrder;
+    } catch (error) {
+      console.error('Failed to create order:', error);
+      throw error;
+    }
+  };
+
+  const updateOrder = async (id: string, updates: any) => {
+    try {
+      console.log('Updating order:', id, updates);
+      const updatedOrder = await currentDataService.updateOrder(id, updates);
+      setOrders(prev => prev.map(o => o.id === id ? updatedOrder : o));
+      return updatedOrder;
+    } catch (error) {
+      console.error('Failed to update order:', error);
+      throw error;
+    }
+  };
+
+  const deleteOrder = async (id: string) => {
+    try {
+      console.log('Deleting order:', id);
+      await currentDataService.deleteOrder(id);
+      setOrders(prev => prev.filter(o => o.id !== id));
+    } catch (error) {
+      console.error('Failed to delete order:', error);
+      throw error;
+    }
+  };
+
+  const getDashboardStats = async (filters?: any) => {
+    try {
+      console.log('Getting dashboard stats with filters:', filters);
+      return await currentDataService.getDashboardStats(filters);
+    } catch (error) {
+      console.error('Failed to get dashboard stats:', error);
+      return null;
     }
   };
 
@@ -409,7 +432,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     createFlavor,
     updateFlavor,
     deleteFlavor,
-    getDashboardStats
+    getDashboardStats,
+    
+    // Cash Flow methods
+    getCashFlowTransactions: currentDataService.getCashFlowTransactions,
+    getCashFlowSummary: currentDataService.getCashFlowSummary,
+    getCashDrawerBalance: currentDataService.getCashDrawerBalance,
+    recordCashInflow: currentDataService.recordCashInflow,
+    recordCashOutflow: currentDataService.recordCashOutflow,
+    addCashDeposit: currentDataService.addCashDeposit,
+    recordExpense: currentDataService.recordExpense,
+    recordRefund: currentDataService.recordRefund,
+    setCashDrawerBalance: currentDataService.setCashDrawerBalance,
+    adjustCashDrawer: currentDataService.adjustCashDrawer,
+    
+    // Direct access to current data service
+    currentDataService
   };
 
   if (!isInitialized) {

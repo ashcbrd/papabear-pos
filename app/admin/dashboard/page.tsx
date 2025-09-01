@@ -1,35 +1,26 @@
 "use client";
 
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  CartesianGrid,
-} from "recharts";
 import { useEffect, useState } from "react";
-import { format, parseISO } from "date-fns";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
 import {
-  PiggyBank,
-  ShoppingBag,
+  BarChart3,
   TrendingUp,
   TrendingDown,
-  Star,
-  Meh,
-  CalendarDays,
+  DollarSign,
+  ShoppingBag,
   Clock,
-  LayoutDashboard,
+  Wallet,
+  Users,
+  Package,
 } from "lucide-react";
-import CustomSelect from "@/components/custom-select";
+import {
+  AdminPageHeader,
+  AdminCard,
+  AdminStat,
+  AdminSelect,
+} from "@/components/admin";
 import { useData } from "@/lib/data-context";
 
-type DateFilter = "all" | "month" | "today" | "range" | "custom";
+type DateFilter = "all" | "month" | "today";
 
 interface DashboardStats {
   all_time_earning: number;
@@ -42,11 +33,14 @@ interface DashboardStats {
   least_product: string;
   busiest_hour: string;
   least_hour: string;
-}
-
-interface DailyEntry {
-  date: string;
-  total: number;
+  cashDrawerBalance?: number;
+  todayInflow?: number;
+  todayOutflow?: number;
+  todayNetFlow?: number;
+  totalOrders?: number;
+  todayOrders?: number;
+  lowStockItems?: number;
+  totalRevenue?: number;
 }
 
 export default function AdminDashboardPage() {
@@ -58,46 +52,23 @@ export default function AdminDashboardPage() {
   const [productData, setProductData] = useState<
     { product: string; quantity: number }[]
   >([]);
-  const [hourData, setHourData] = useState<{ hour: string; total: number }[]>(
-    []
-  );
-  const [allTimeDailyData, setAllTimeDailyData] = useState<DailyEntry[]>([]);
-  const [busiestWeekday, setBusiestWeekday] = useState<string>("");
-  const [slowestWeekday, setSlowestWeekday] = useState<string>("");
-
   const [filter, setFilter] = useState<DateFilter>("all");
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
 
   const filterOptions: { label: string; value: DateFilter }[] = [
     { label: "All Time", value: "all" },
     { label: "This Month", value: "month" },
     { label: "Today", value: "today" },
-    { label: "Custom Range", value: "range" },
-    { label: "Custom Date", value: "custom" },
   ];
 
   const loadData = async () => {
     try {
       const filters: any = { filter };
-
-      if (filter === "range" && startDate && endDate) {
-        filters.start = startDate.toISOString();
-        filters.end = endDate.toISOString();
-      }
-
-      if (filter === "custom" && startDate) {
-        filters.date = startDate.toISOString();
-      }
-
       const data = await getDashboardStats(filters);
       
       if (data) {
         setStats(data.stats);
         setMonthlyData(data.monthly || []);
         setProductData(data.products || []);
-        setHourData(data.hours || []);
-        setAllTimeDailyData(data.all_time_daily || []);
       }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
@@ -106,262 +77,188 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     loadData();
-  }, [filter, startDate, endDate]);
+  }, [filter]);
 
-  // Compute average weekday performance
-  useEffect(() => {
-    if (allTimeDailyData.length === 0) return;
-
-    const weekdayTotals: { [day: string]: { total: number; count: number } } = {
-      Sunday: { total: 0, count: 0 },
-      Monday: { total: 0, count: 0 },
-      Tuesday: { total: 0, count: 0 },
-      Wednesday: { total: 0, count: 0 },
-      Thursday: { total: 0, count: 0 },
-      Friday: { total: 0, count: 0 },
-      Saturday: { total: 0, count: 0 },
-    };
-
-    for (const entry of allTimeDailyData) {
-      const date = parseISO(entry.date);
-      const day = format(date, "EEEE");
-      weekdayTotals[day].total += entry.total;
-      weekdayTotals[day].count += 1;
-    }
-
-    const averageByDay = Object.entries(weekdayTotals).map(
-      ([day, { total, count }]) => ({
-        day,
-        avg: count === 0 ? 0 : total / count,
-      })
+  if (!stats) {
+    return (
+      <div className="space-y-8">
+        <AdminPageHeader
+          title="Dashboard"
+          icon={<BarChart3 size={24} />}
+          description="Overview of your Papa Bear Café performance"
+        />
+        <AdminCard>
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
+              <p className="text-gray-500 mt-4">Loading dashboard data...</p>
+            </div>
+          </div>
+        </AdminCard>
+      </div>
     );
+  }
 
-    averageByDay.sort((a, b) => b.avg - a.avg);
-    setBusiestWeekday(averageByDay[0].day);
-    setSlowestWeekday(averageByDay[averageByDay.length - 1].day);
-  }, [allTimeDailyData]);
-
-  if (!stats) return <div className="p-6 text-lg">Loading dashboard...</div>;
+  const statsData = [
+    {
+      title: "Total Revenue",
+      value: `₱${stats.totalRevenue?.toLocaleString() || '0'}`,
+      icon: <DollarSign className="w-6 h-6 text-emerald-600" />,
+      trend: {
+        value: stats.trend_percent || 0,
+        isPositive: stats.trend === 'up'
+      },
+      description: "All time earnings"
+    },
+    {
+      title: "Total Orders",
+      value: stats.totalOrders?.toLocaleString() || '0',
+      icon: <ShoppingBag className="w-6 h-6 text-blue-600" />,
+      description: `${stats.todayOrders || 0} orders today`
+    },
+    {
+      title: "Cash Drawer",
+      value: `₱${stats.cashDrawerBalance?.toLocaleString() || '0'}`,
+      icon: <Wallet className="w-6 h-6 text-green-600" />,
+      description: "Current balance"
+    },
+    {
+      title: "Today's Sales", 
+      value: `₱${stats.todayInflow?.toLocaleString() || '0'}`,
+      icon: <TrendingUp className="w-6 h-6 text-purple-600" />,
+      description: "Revenue today"
+    }
+  ];
 
   return (
-    <div className="p-6 space-y-10 bg-gray-50 min-h-screen">
-      <div className="flex items-center gap-2">
-        <LayoutDashboard size={24} className="text-green-700" />
-        <h1 className="text-xl font-bold">Dashboard</h1>
-      </div>
-      <div className="flex items-center gap-4 flex-wrap">
-        <CustomSelect<DateFilter>
-          value={filter}
-          options={filterOptions}
-          onChange={(value) => setFilter(value)}
-          className="w-60"
-        />
-        {filter === "range" && (
-          <>
-            <DatePicker
-              selected={startDate}
-              onChange={(date) => setStartDate(date)}
-              selectsStart
-              startDate={startDate}
-              endDate={endDate}
-              placeholderText="Start date"
-              className="border border-zinc-300 px-2 py-1 rounded-md"
-            />
-            <DatePicker
-              selected={endDate}
-              onChange={(date) => setEndDate(date)}
-              selectsEnd
-              startDate={startDate}
-              endDate={endDate}
-              placeholderText="End date"
-              className="border border-zinc-300 px-2 py-1 rounded-md"
-            />
-          </>
-        )}
+    <div className="space-y-8">
+      <AdminPageHeader
+        title="Dashboard"
+        icon={<BarChart3 size={24} />}
+        description="Overview of your Papa Bear Café performance"
+      />
 
-        {filter === "custom" && (
-          <DatePicker
-            selected={startDate}
-            onChange={(date) => setStartDate(date)}
-            placeholderText="Pick a date"
-            className="border border-zinc-300 px-2 py-1 rounded-md"
+      {/* Filter Controls */}
+      <AdminCard>
+        <div className="flex items-center gap-4">
+          <label className="text-sm font-semibold text-gray-700">Time Period:</label>
+          <AdminSelect
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as DateFilter)}
+            options={filterOptions}
+            fullWidth={false}
+            className="w-48"
           />
-        )}
+        </div>
+      </AdminCard>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {statsData.map((stat, index) => (
+          <AdminStat
+            key={index}
+            title={stat.title}
+            value={stat.value}
+            icon={stat.icon}
+            trend={stat.trend}
+            description={stat.description}
+          />
+        ))}
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          icon={<PiggyBank />}
-          title="All-Time Earning"
-          value={`₱${stats.all_time_earning.toLocaleString()}`}
-          variant="revenue"
-        />
-        <StatCard
-          icon={<ShoppingBag />}
-          title="Products Sold"
-          value={stats.all_time_products_sold}
-          variant="products"
-        />
-        <StatCard
-          icon={<PiggyBank />}
-          title="This Month Sales"
-          value={`₱${stats.this_month_sales.toLocaleString()}`}
-          variant="revenue"
-        />
-        <StatCard
-          icon={stats.trend === "up" ? <TrendingUp /> : <TrendingDown />}
-          title={stats.trend === "up" ? "Uptrend" : "Downtrend"}
-          value={
-            <span
-              className={`font-semibold ${
-                stats.trend === "up" ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {stats.trend_percent.toFixed(2)}%
-            </span>
-          }
-          variant={stats.trend === "up" ? "trend-up" : "trend-down"}
-        />
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Monthly Sales Chart */}
+        <AdminCard>
+          <div className="mb-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Monthly Sales</h3>
+            <p className="text-gray-600">Sales trends over the last 6 months</p>
+          </div>
+          <div className="space-y-4">
+            {monthlyData.map((item, index) => (
+              <div key={index} className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">{item.month}</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-32 bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-emerald-600 h-2 rounded-full"
+                      style={{ 
+                        width: `${Math.min((item.total / Math.max(...monthlyData.map(d => d.total))) * 100, 100)}%` 
+                      }}
+                    ></div>
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900">
+                    ₱{item.total.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </AdminCard>
 
-        <StatCard
-          icon={<CalendarDays />}
-          title="Busiest Day"
-          value={busiestWeekday}
-          variant="busiest"
-        />
-        <StatCard
-          icon={<CalendarDays />}
-          title="Slowest Day"
-          value={slowestWeekday}
-          variant="slowest"
-        />
-        <StatCard
-          icon={<Clock />}
-          title="Busiest Hour"
-          value={stats.busiest_hour}
-          variant="busiest"
-        />
-        <StatCard
-          icon={<Clock />}
-          title="Slowest Hour"
-          value={stats.least_hour}
-          variant="slowest"
-        />
-        <StatCard
-          icon={<Star />}
-          title="Best Product"
-          value={stats.best_product}
-          variant="best"
-          className="col-span-2"
-        />
-        <StatCard
-          icon={<Meh />}
-          title="Least Product"
-          value={stats.least_product}
-          variant="least"
-          className="col-span-2"
-        />
+        {/* Top Products */}
+        <AdminCard>
+          <div className="mb-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Top Products</h3>
+            <p className="text-gray-600">Best selling items</p>
+          </div>
+          <div className="space-y-4">
+            {productData.map((item, index) => (
+              <div key={index} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <Package className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">{item.product}</span>
+                </div>
+                <span className="text-sm font-semibold text-gray-900">
+                  {item.quantity} sold
+                </span>
+              </div>
+            ))}
+          </div>
+        </AdminCard>
       </div>
 
-      {/* Charts */}
-      <ChartSection title="📆 Monthly Sales Trend">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={monthlyData}>
-            <XAxis dataKey="month" />
-            <YAxis />
-            <CartesianGrid strokeDasharray="3 3" />
-            <Tooltip />
-            <Line type="monotone" dataKey="total" stroke="#6366f1" />
-          </LineChart>
-        </ResponsiveContainer>
-      </ChartSection>
-
-      <ChartSection title="🍽️ Top Selling Products">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={productData}>
-            <XAxis dataKey="product" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="quantity" fill="#10b981" />
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartSection>
-
-      <ChartSection title="⏰ Sales by Hour">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={hourData}>
-            <XAxis dataKey="hour" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="total" fill="#3b82f6" />
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartSection>
-    </div>
-  );
-}
-
-type StatVariant =
-  | "revenue"
-  | "products"
-  | "trend-up"
-  | "trend-down"
-  | "best"
-  | "least"
-  | "busiest"
-  | "slowest"
-  | "default";
-
-const variantStyles: Record<StatVariant, string> = {
-  revenue: "from-green-100 to-green-200",
-  products: "from-blue-100 to-blue-200",
-  "trend-up": "from-emerald-100 to-emerald-200",
-  "trend-down": "from-rose-100 to-rose-200",
-  best: "from-yellow-100 to-yellow-200",
-  least: "from-zinc-100 to-zinc-200",
-  busiest: "from-lime-100 to-lime-200",
-  slowest: "from-red-100 to-red-200",
-  default: "from-gray-100 to-gray-200",
-};
-
-function StatCard({
-  icon,
-  title,
-  value,
-  variant = "default",
-  className = "",
-}: {
-  icon?: React.ReactNode;
-  title: string;
-  value: React.ReactNode;
-  variant?: StatVariant;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`bg-gradient-to-br ${variantStyles[variant]} border border-zinc-300 rounded-md p-4 flex flex-col gap-2 ${className}`}
-    >
-      <div className="flex items-center gap-2 text-sm text-gray-700">
-        {icon}
-        {title}
-      </div>
-      <div className="text-xl font-semibold text-gray-900">{value}</div>
-    </div>
-  );
-}
-
-function ChartSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white border border-zinc-300 rounded-md p-4 h-96">
-      <h3 className="text-lg font-semibold mb-4 text-gray-700">{title}</h3>
-      <div className="w-full h-[80%]">{children}</div>
+      {/* Business Insights */}
+      <AdminCard>
+        <div className="mb-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Business Insights</h3>
+          <p className="text-gray-600">Key performance indicators</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="text-center p-4 bg-emerald-50 rounded-lg">
+            <div className="flex items-center justify-center w-12 h-12 bg-emerald-100 rounded-full mx-auto mb-3">
+              <TrendingUp className="w-6 h-6 text-emerald-600" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-1">Best Product</h4>
+            <p className="text-sm text-gray-600">{stats.best_product}</p>
+          </div>
+          <div className="text-center p-4 bg-blue-50 rounded-lg">
+            <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-full mx-auto mb-3">
+              <Clock className="w-6 h-6 text-blue-600" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-1">Busiest Hour</h4>
+            <p className="text-sm text-gray-600">{stats.busiest_hour}</p>
+          </div>
+          <div className="text-center p-4 bg-purple-50 rounded-lg">
+            <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-full mx-auto mb-3">
+              <Users className="w-6 h-6 text-purple-600" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-1">Month Trend</h4>
+            <p className="text-sm text-gray-600">
+              {stats.trend === 'up' ? '↗️' : '↘️'} {stats.trend_percent}%
+            </p>
+          </div>
+          <div className="text-center p-4 bg-amber-50 rounded-lg">
+            <div className="flex items-center justify-center w-12 h-12 bg-amber-100 rounded-full mx-auto mb-3">
+              <Package className="w-6 h-6 text-amber-600" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-1">Low Stock</h4>
+            <p className="text-sm text-gray-600">{stats.lowStockItems || 0} items</p>
+          </div>
+        </div>
+      </AdminCard>
     </div>
   );
 }

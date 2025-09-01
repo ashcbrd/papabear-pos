@@ -5,6 +5,7 @@ import { Category, Ingredient, Material } from "@prisma/client";
 import { Pencil, Trash, PlusCircle, XCircle, Package, Plus } from "lucide-react";
 import CustomSelect from "@/components/custom-select";
 import { useData } from "@/lib/data-context";
+import ImageUpload from "@/components/admin/image-upload";
 import {
   AdminPageHeader,
   AdminFormSection,
@@ -33,11 +34,20 @@ const allFlavorOptions: FlavorName[] = [
   "Coconut",
 ];
 
-type SizeName = "Medium" | "Large";
-const allSizeOptions: SizeName[] = [
-  "Medium",
-  "Large",
-];
+type SizeName = "8oz" | "12oz" | "Medium" | "Large" | "Single";
+
+const getSizeOptionsForCategory = (category: Category): SizeName[] => {
+  switch (category) {
+    case "HotBeverages":
+      return ["8oz", "12oz"];
+    case "ColdBeverages":
+      return ["Medium", "Large"];
+    case "Meals":
+      return ["Single"];
+    default:
+      return [];
+  }
+};
 
 interface FlavorInput {
   name: FlavorName;
@@ -71,26 +81,32 @@ interface Product {
 export default function ProductsAdminPage() {
   const { products, materials, ingredients, createProduct, updateProduct, deleteProduct } = useData();
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<Category>("InsideMeals");
-  const [flavors, setFlavors] = useState<FlavorInput[]>([
-    { name: "Original" },
-  ]);
-  const [sizes, setSizes] = useState<SizeInput[]>([
-    { name: "Medium", price: 0, materials: [], ingredients: [] },
-  ]);
+  const [category, setCategory] = useState<Category>("Meals");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [flavors, setFlavors] = useState<FlavorInput[]>([]);
+  const [sizes, setSizes] = useState<SizeInput[]>([]);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+
+  // Update sizes when category changes
+  useEffect(() => {
+    const availableSizes = getSizeOptionsForCategory(category);
+    if (availableSizes.length > 0 && sizes.length === 0) {
+      setSizes([{ name: availableSizes[0], price: 0, materials: [], ingredients: [] }]);
+    }
+  }, [category, sizes.length]);
 
   const resetForm = () => {
     setEditingProductId(null);
     setName("");
-    setCategory("InsideMeals");
-    setFlavors([{ name: "Original" }]);
-    setSizes([{ name: "Medium", price: 0, materials: [], ingredients: [] }]);
+    setCategory("Meals");
+    setImageUrl(null);
+    setFlavors([]);
+    setSizes([]);
   };
 
   const handleSave = async () => {
     try {
-      const payload = { name, category, flavors, sizes };
+      const payload = { name, category, imageUrl, flavors, sizes };
       if (editingProductId) {
         await updateProduct(editingProductId, payload);
       } else {
@@ -115,24 +131,25 @@ export default function ProductsAdminPage() {
 
   const startEdit = (p: Product) => {
     setEditingProductId(p.id);
-    setName(p.name);
-    setCategory(p.category);
+    setName(p.name || "");
+    setCategory(p.category || "Meals");
+    setImageUrl(p.imageUrl || null);
     setFlavors(
-      p.flavors.map((f) => ({
+      (p.flavors || []).map((f) => ({
         name: f.name,
       }))
     );
     setSizes(
-      p.sizes.map((s) => ({
+      (p.sizes || []).map((s) => ({
         name: s.name,
-        price: s.price,
-        materials: s.materials.map((m) => ({
-          id: m.material.id,
-          quantity: m.quantityUsed,
+        price: s.price || 0,
+        materials: (s.materials || []).map((m) => ({
+          id: m.material?.id || m.id,
+          quantity: m.quantityUsed || m.quantity || 0,
         })),
-        ingredients: s.ingredients.map((i) => ({
-          id: i.ingredient.id,
-          quantity: i.quantityUsed,
+        ingredients: (s.ingredients || []).map((i) => ({
+          id: i.ingredient?.id || i.id,
+          quantity: i.quantityUsed || i.quantity || 0,
         })),
       }))
     );
@@ -140,6 +157,25 @@ export default function ProductsAdminPage() {
 
   // Prepare table columns
   const tableColumns = [
+    {
+      header: 'Image',
+      accessor: 'imageUrl',
+      cell: (row: any) => (
+        <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+          {row.imageUrl ? (
+            <img
+              src={row.imageUrl}
+              alt={row.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gray-200">
+              <Package size={16} className="text-gray-400" />
+            </div>
+          )}
+        </div>
+      )
+    },
     {
       header: 'Name',
       accessor: 'name',
@@ -232,10 +268,17 @@ export default function ProductsAdminPage() {
             value={category}
             onChange={(e) => setCategory(e.target.value as Category)}
             options={[
-              { label: "Inside Meals", value: "InsideMeals" },
-              { label: "Outside Snacks", value: "OutsideSnacks" },
-              { label: "Inside Beverages", value: "InsideBeverages" },
+              { label: "Meals", value: "Meals" },
+              { label: "Cold Beverages", value: "ColdBeverages" },
+              { label: "Hot Beverages", value: "HotBeverages" },
             ]}
+          />
+        </div>
+
+        <div className="mt-6">
+          <ImageUpload
+            value={imageUrl}
+            onChange={setImageUrl}
           />
         </div>
 
@@ -277,9 +320,10 @@ export default function ProductsAdminPage() {
                 size="sm"
                 variant="outline"
                 icon={<Plus size={16} />}
-                disabled={sizes.length >= allSizeOptions.length}
+                disabled={sizes.length >= getSizeOptionsForCategory(category).length}
                 onClick={() => {
-                  const name = allSizeOptions.find(
+                  const availableOptions = getSizeOptionsForCategory(category);
+                  const name = availableOptions.find(
                     (opt) => !sizes.some((s) => s.name === opt)
                   )!;
                   setSizes([
@@ -301,6 +345,7 @@ export default function ProductsAdminPage() {
                 setSizes={setSizes}
                 materials={materials}
                 ingredients={ingredients}
+                category={category}
               />
             ))}
           </div>
@@ -390,6 +435,7 @@ function SizeEditor({
   setSizes,
   materials,
   ingredients,
+  category,
 }: {
   idx: number;
   size: SizeInput;
@@ -397,6 +443,7 @@ function SizeEditor({
   setSizes: React.Dispatch<React.SetStateAction<SizeInput[]>>;
   materials: Material[];
   ingredients: Ingredient[];
+  category: Category;
 }) {
   const update = (s: SizeInput) =>
     setSizes(sizes.map((x, i) => (i === idx ? s : x)));
@@ -408,7 +455,7 @@ function SizeEditor({
           label="Size"
           value={size.name}
           onChange={(e) => update({ ...size, name: e.target.value as SizeName })}
-          options={allSizeOptions
+          options={getSizeOptionsForCategory(category)
             .filter(
               (opt) =>
                 opt === size.name || !sizes.some((s) => s.name === opt)
@@ -441,20 +488,22 @@ function SizeEditor({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <NestedSelectors
-          title="Materials"
-          items={size.materials}
-          all={materials}
-          onChange={(items) => update({ ...size, materials: items })}
-        />
-        <NestedSelectors
-          title="Ingredients"
-          items={size.ingredients}
-          all={ingredients}
-          onChange={(items) => update({ ...size, ingredients: items })}
-        />
-      </div>
+      {category !== "Meals" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <NestedSelectors
+            title="Materials"
+            items={size.materials}
+            all={materials}
+            onChange={(items) => update({ ...size, materials: items })}
+          />
+          <NestedSelectors
+            title="Ingredients"
+            items={size.ingredients}
+            all={ingredients}
+            onChange={(items) => update({ ...size, ingredients: items })}
+          />
+        </div>
+      )}
     </AdminCard>
   );
 }

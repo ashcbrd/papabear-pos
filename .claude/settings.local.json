@@ -16,7 +16,8 @@
       "Bash(npx prisma:*)",
       "Bash(npx tsx:*)",
       "Bash(adb logcat:*)",
-      "Bash(adb:*)"
+      "Bash(adb:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

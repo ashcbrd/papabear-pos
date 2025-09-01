@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { IngredientInput, IngredientWithStock } from "@/lib/types";
-import { Pencil, Soup, Trash } from "lucide-react";
+import { Pencil, Soup, Trash, Save, X } from "lucide-react";
 import { useData } from "@/lib/data-context";
 import {
   AdminPageHeader,
@@ -41,13 +41,20 @@ export default function IngredientsAdminPage() {
     Partial<IngredientInput & { pricePerUnit: number }>
   >({});
 
-
   useEffect(() => {
     if (unitsPerPurchase > 0) {
       setPricePerUnit(pricePerPurchase / unitsPerPurchase);
     }
   }, [pricePerPurchase, unitsPerPurchase]);
 
+  const resetForm = () => {
+    setName("");
+    setMeasurementUnit("piece");
+    setUnitsPerPurchase(1);
+    setPricePerPurchase(0);
+    setPricePerUnit(0);
+    setStockQuantity(0);
+  };
 
   const handleCreateIngredient = async () => {
     try {
@@ -60,13 +67,7 @@ export default function IngredientsAdminPage() {
       };
 
       await createIngredient(payload);
-
-      setName("");
-      setMeasurementUnit("piece");
-      setUnitsPerPurchase(1);
-      setPricePerPurchase(0);
-      setPricePerUnit(0);
-      setStockQuantity(0);
+      resetForm();
     } catch (error) {
       console.error("Failed to create ingredient:", error);
       alert("Failed to create ingredient");
@@ -109,210 +110,186 @@ export default function IngredientsAdminPage() {
     }
   };
 
+  const startEdit = (ingredient: any) => {
+    setEditingId(ingredient.id);
+    setEditForm({
+      name: ingredient.name,
+      measurementUnit: ingredient.measurementUnit,
+      unitsPerPurchase: ingredient.unitsPerPurchase ?? undefined,
+      pricePerPurchase: ingredient.pricePerPurchase,
+      pricePerUnit: ingredient.pricePerUnit,
+      stockQuantity: ingredient.stock?.quantity ?? 0,
+    });
+  };
+
+  // Table columns configuration
+  const tableColumns = [
+    {
+      header: 'Name',
+      accessor: 'name',
+    },
+    {
+      header: 'Unit',
+      accessor: 'measurementUnit',
+      cell: (row: any) => (
+        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+          {row.measurementUnit}
+        </span>
+      )
+    },
+    {
+      header: 'Price/Purchase',
+      accessor: 'pricePerPurchase',
+      cell: (row: any) => (
+        <div className="space-y-1">
+          <div className="font-medium">₱{row.pricePerPurchase?.toFixed(2)}</div>
+          <div className="text-xs text-gray-500">
+            {row.unitsPerPurchase} {row.measurementUnit}(s)
+          </div>
+        </div>
+      )
+    },
+    {
+      header: 'Price/Unit',
+      accessor: 'pricePerUnit',
+      cell: (row: any) => (
+        <div className="font-medium text-green-600">
+          ₱{row.pricePerUnit?.toFixed(2)}
+        </div>
+      )
+    },
+    {
+      header: 'Stock',
+      accessor: 'stock',
+      cell: (row: any) => {
+        const quantity = row.stock?.quantity ?? 0;
+        return (
+          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+            quantity > 10 ? 'bg-green-100 text-green-800' :
+            quantity > 5 ? 'bg-yellow-100 text-yellow-800' :
+            'bg-red-100 text-red-800'
+          }`}>
+            {quantity} {row.measurementUnit}
+          </span>
+        );
+      }
+    },
+    {
+      header: 'Actions',
+      accessor: 'id',
+      cell: (row: any) => (
+        <div className="flex items-center gap-2">
+          <AdminButton
+            size="sm"
+            variant="outline"
+            icon={<Pencil size={14} />}
+            onClick={() => startEdit(row)}
+          >
+            Edit
+          </AdminButton>
+          <AdminButton
+            size="sm"
+            variant="danger"
+            icon={<Trash size={14} />}
+            onClick={() => handleDelete(row.id)}
+          >
+            Delete
+          </AdminButton>
+        </div>
+      )
+    }
+  ];
+
   return (
-    <div className="p-6 space-y-6">
-      {" "}
-      <div className="flex items-center gap-2">
-        <Soup size={24} className="text-green-700" />
-        <h1 className="text-xl font-bold">Ingredients</h1>
-      </div>
-      <div className="space-y-2 border border-zinc-300 rounded-md p-4 bg-white">
-        <label className="block text-sm">Ingredient Name</label>
-        <input
-          className="border border-zinc-300 rounded-md p-2 w-full"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+    <div className="space-y-8">
+      <AdminPageHeader
+        title="Ingredients"
+        icon={<Soup size={24} />}
+        description="Manage your restaurant's ingredients, pricing, and stock levels"
+      />
 
-        <label className="block text-sm">Measurement Unit</label>
-        <select
-          className="border border-zinc-300 rounded-md p-2 w-full"
-          value={measurementUnit}
-          onChange={(e) => setMeasurementUnit(e.target.value)}
-        >
-          {measurementUnits.map((unit) => (
-            <option key={unit} value={unit}>
-              {unit}
-            </option>
-          ))}
-        </select>
+      <AdminFormSection
+        title="Create New Ingredient"
+        description="Add a new ingredient with pricing and initial stock information"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <AdminInput
+            label="Ingredient Name"
+            placeholder="Enter ingredient name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
 
-        <label className="block text-sm">Units per Purchase</label>
-        <input
-          type="number"
-          className="border border-zinc-300 rounded-md p-2 w-full"
-          value={unitsPerPurchase}
-          onChange={(e) => setUnitsPerPurchase(parseFloat(e.target.value))}
-        />
+          <AdminSelect
+            label="Measurement Unit"
+            value={measurementUnit}
+            onChange={(e) => setMeasurementUnit(e.target.value)}
+            options={measurementUnits.map(unit => ({ label: unit, value: unit }))}
+          />
 
-        <label className="block text-sm">Price per Purchase</label>
-        <input
-          type="number"
-          className="border border-zinc-300 rounded-md p-2 w-full"
-          value={pricePerPurchase}
-          onChange={(e) => setPricePerPurchase(parseFloat(e.target.value))}
-        />
+          <AdminInput
+            type="number"
+            label="Units per Purchase"
+            placeholder="1"
+            value={unitsPerPurchase}
+            onChange={(e) => setUnitsPerPurchase(parseFloat(e.target.value) || 1)}
+          />
 
-        <div className="text-sm text-gray-600">
-          ₱{pricePerUnit.toFixed(2)} per {measurementUnit}
+          <AdminInput
+            type="number"
+            label="Price per Purchase (₱)"
+            placeholder="0.00"
+            value={pricePerPurchase}
+            onChange={(e) => setPricePerPurchase(parseFloat(e.target.value) || 0)}
+          />
+
+          <AdminInput
+            type="number"
+            label="Initial Stock Quantity"
+            placeholder="0"
+            value={stockQuantity}
+            onChange={(e) => setStockQuantity(parseInt(e.target.value) || 0)}
+          />
+
+          <div className="flex flex-col">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Calculated Price per Unit
+            </label>
+            <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
+              <span className="text-lg font-semibold text-green-800">
+                ₱{pricePerUnit.toFixed(2)} per {measurementUnit}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <label className="block text-sm">Initial Stock Quantity</label>
-        <input
-          type="number"
-          className="border border-zinc-300 rounded-md p-2 w-full"
-          value={stockQuantity}
-          onChange={(e) => setStockQuantity(parseInt(e.target.value))}
-        />
-
-        <div className="flex gap-2 mt-2">
-          <button
-            onClick={() => {
-              setName("");
-              setMeasurementUnit("piece");
-              setUnitsPerPurchase(1);
-              setPricePerPurchase(0);
-              setPricePerUnit(0);
-              setStockQuantity(0);
-            }}
-            className="bg-zinc-200 text-zinc-700 px-4 py-2 rounded-md hover:bg-zinc-300 transition"
+        <AdminActions>
+          <AdminButton
+            variant="secondary"
+            onClick={resetForm}
           >
             Cancel
-          </button>
-
-          <button
+          </AdminButton>
+          <AdminButton
+            variant="primary"
             onClick={handleCreateIngredient}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
           >
             Create Ingredient
-          </button>
+          </AdminButton>
+        </AdminActions>
+      </AdminFormSection>
+
+      <AdminCard>
+        <div className="mb-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-2">All Ingredients</h3>
+          <p className="text-gray-600">Manage and edit your existing ingredients</p>
         </div>
-      </div>
-      <table className="w-full mt-6 border border-zinc-300 text-sm bg-white rounded-md overflow-hidden">
-        <thead>
-          <tr className="text-left">
-            <th className="p-2">Name</th>
-            <th className="p-2">Unit</th>
-            <th className="p-2">Price/Unit</th>
-            <th className="p-2">Stock</th>
-            <th className="p-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ingredients.map((i) => (
-            <tr key={i.id} className="border-t border-zinc-200 align-top">
-              {editingId === i.id ? (
-                <>
-                  <td className="p-2">
-                    <input
-                      value={editForm.name ?? i.name}
-                      onChange={(e) => handleEditChange("name", e.target.value)}
-                      className="border border-zinc-300 p-1 w-full rounded-md"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <select
-                      value={editForm.measurementUnit ?? i.measurementUnit}
-                      onChange={(e) =>
-                        handleEditChange("measurementUnit", e.target.value)
-                      }
-                      className="border border-zinc-300 p-1 w-full rounded-md"
-                    >
-                      {measurementUnits.map((unit) => (
-                        <option key={unit}>{unit}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="number"
-                      value={editForm.pricePerPurchase ?? i.pricePerPurchase}
-                      onChange={(e) =>
-                        handleEditChange(
-                          "pricePerPurchase",
-                          parseFloat(e.target.value)
-                        )
-                      }
-                      className="border border-zinc-300 p-1 w-full rounded-md mb-1"
-                    />
-                    <input
-                      type="number"
-                      value={
-                        editForm.unitsPerPurchase ?? i.unitsPerPurchase ?? 0
-                      }
-                      onChange={(e) =>
-                        handleEditChange(
-                          "unitsPerPurchase",
-                          parseFloat(e.target.value)
-                        )
-                      }
-                      className="border border-zinc-300 p-1 w-full rounded-md"
-                    />
-                    <div className="text-xs text-gray-500 mt-1">
-                      ₱{(editForm.pricePerUnit ?? i.pricePerUnit).toFixed(2)}{" "}
-                      per unit
-                    </div>
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="number"
-                      value={editForm.stockQuantity ?? i.stock?.quantity ?? 0}
-                      onChange={(e) =>
-                        handleEditChange(
-                          "stockQuantity",
-                          parseInt(e.target.value)
-                        )
-                      }
-                      className="border border-zinc-300 p-1 w-full rounded-md"
-                    />
-                  </td>
-                  <td className="p-2 space-x-2">
-                    <button
-                      onClick={saveEdit}
-                      className="text-green-600 hover:underline"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      className="text-gray-600 hover:underline"
-                    >
-                      Cancel
-                    </button>
-                  </td>
-                </>
-              ) : (
-                <>
-                  <td className="p-2">{i.name}</td>
-                  <td className="p-2">{i.measurementUnit}</td>
-                  <td className="p-2">₱{i.pricePerUnit.toFixed(2)}</td>
-                  <td className="p-2">{i.stock?.quantity ?? 0}</td>
-                  <td className="p-2 flex gap-2">
-                    <button
-                      onClick={() => {
-                        setEditingId(i.id);
-                        setEditForm({
-                          name: i.name,
-                          measurementUnit: i.measurementUnit,
-                          unitsPerPurchase: i.unitsPerPurchase ?? undefined,
-                          pricePerPurchase: i.pricePerPurchase,
-                          pricePerUnit: i.pricePerUnit,
-                          stockQuantity: i.stock?.quantity ?? 0,
-                        });
-                      }}
-                    >
-                      <Pencil size={16} className="text-blue-600" />
-                    </button>
-                    <button onClick={() => handleDelete(i.id)}>
-                      <Trash size={16} className="text-red-600" />
-                    </button>
-                  </td>
-                </>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        <AdminTable
+          columns={tableColumns}
+          data={ingredients}
+          emptyMessage="No ingredients found. Create your first ingredient above."
+        />
+      </AdminCard>
     </div>
   );
 }

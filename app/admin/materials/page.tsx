@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MaterialInput, MaterialWithStock } from "@/lib/types";
-import { Boxes, Pencil, Trash } from "lucide-react";
+import { Boxes, Pencil, Trash, Package } from "lucide-react";
 import { useData } from "@/lib/data-context";
 import {
   AdminPageHeader,
@@ -27,12 +27,20 @@ export default function MaterialsAdminPage() {
     Partial<MaterialInput & { stockQuantity?: number }>
   >({});
 
-
   useEffect(() => {
     if (isPackage && packagePrice && unitsPerPackage > 0) {
       setPricePerPiece(packagePrice / unitsPerPackage);
     }
   }, [isPackage, packagePrice, unitsPerPackage]);
+
+  const resetForm = () => {
+    setName("");
+    setIsPackage(false);
+    setPackagePrice(0);
+    setUnitsPerPackage(0);
+    setPricePerPiece(0);
+    setStockQuantity(0);
+  };
 
   const handleCreateMaterial = async () => {
     try {
@@ -46,13 +54,7 @@ export default function MaterialsAdminPage() {
       };
 
       await createMaterial(payload);
-
-      setName("");
-      setIsPackage(false);
-      setPackagePrice(0);
-      setUnitsPerPackage(0);
-      setPricePerPiece(0);
-      setStockQuantity(0);
+      resetForm();
     } catch (error) {
       console.error("Failed to create material:", error);
       alert("Failed to create material");
@@ -90,7 +92,6 @@ export default function MaterialsAdminPage() {
       };
 
       await updateMaterial(editingId, payload);
-
       setEditingId(null);
       setEditForm({});
     } catch (error) {
@@ -99,202 +100,210 @@ export default function MaterialsAdminPage() {
     }
   };
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center gap-2">
-        <Boxes size={24} className="text-green-700" />
-        <h1 className="text-xl font-bold">Materials</h1>
-      </div>
+  const startEdit = (material: any) => {
+    setEditingId(material.id);
+    setEditForm({
+      name: material.name,
+      isPackage: material.isPackage,
+      packagePrice: material.packagePrice,
+      unitsPerPackage: material.unitsPerPackage,
+      pricePerPiece: material.pricePerPiece,
+      stockQuantity: material.stock?.quantity ?? 0,
+    });
+  };
 
-      <div className="space-y-4 bg-white border border-zinc-300 p-4 rounded-md">
-        <div>
-          <label className="block text-sm mb-1">Material Name</label>
-          <input
-            className="border border-zinc-300 p-2 w-full rounded-md"
+  // Table columns configuration
+  const tableColumns = [
+    {
+      header: 'Name',
+      accessor: 'name',
+    },
+    {
+      header: 'Type',
+      accessor: 'isPackage',
+      cell: (row: any) => (
+        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+          row.isPackage ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+        }`}>
+          {row.isPackage ? 'Package' : 'Individual'}
+        </span>
+      )
+    },
+    {
+      header: 'Pricing',
+      accessor: 'pricePerPiece',
+      cell: (row: any) => (
+        <div className="space-y-1">
+          <div className="font-medium text-green-600">
+            ₱{row.pricePerPiece?.toFixed(2)} per piece
+          </div>
+          {row.isPackage && (
+            <div className="text-xs text-gray-500">
+              ₱{row.packagePrice?.toFixed(2)} per {row.unitsPerPackage} pieces
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Stock',
+      accessor: 'stock',
+      cell: (row: any) => {
+        const quantity = row.stock?.quantity ?? 0;
+        return (
+          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+            quantity > 50 ? 'bg-green-100 text-green-800' :
+            quantity > 20 ? 'bg-yellow-100 text-yellow-800' :
+            'bg-red-100 text-red-800'
+          }`}>
+            {quantity} pieces
+          </span>
+        );
+      }
+    },
+    {
+      header: 'Actions',
+      accessor: 'id',
+      cell: (row: any) => (
+        <div className="flex items-center gap-2">
+          <AdminButton
+            size="sm"
+            variant="outline"
+            icon={<Pencil size={14} />}
+            onClick={() => startEdit(row)}
+          >
+            Edit
+          </AdminButton>
+          <AdminButton
+            size="sm"
+            variant="danger"
+            icon={<Trash size={14} />}
+            onClick={() => handleDelete(row.id)}
+          >
+            Delete
+          </AdminButton>
+        </div>
+      )
+    }
+  ];
+
+  return (
+    <div className="space-y-8">
+      <AdminPageHeader
+        title="Materials"
+        icon={<Boxes size={24} />}
+        description="Manage your restaurant's materials, packaging, and supplies"
+      />
+
+      <AdminFormSection
+        title="Create New Material"
+        description="Add a new material with pricing and initial stock information"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <AdminInput
+            label="Material Name"
+            placeholder="Enter material name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
+
+          <div className="flex flex-col">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Pricing Type
+            </label>
+            <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+              <input
+                type="checkbox"
+                checked={isPackage}
+                onChange={(e) => setIsPackage(e.target.checked)}
+                className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500"
+              />
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-purple-600" />
+                <span className="text-sm font-medium text-gray-700">Sold as a package</span>
+              </div>
+            </label>
+          </div>
         </div>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={isPackage}
-            onChange={(e) => setIsPackage(e.target.checked)}
-          />
-          Sold as a package?
-        </label>
-
         {isPackage ? (
-          <>
-            <div>
-              <label className="block text-sm mb-1">Package Price</label>
-              <input
-                type="number"
-                className="border border-zinc-300 p-2 w-full rounded-md"
-                value={packagePrice}
-                onChange={(e) => setPackagePrice(parseFloat(e.target.value))}
-              />
-            </div>
-            <div>
-              <label className="block text-sm mb-1">Units per Package</label>
-              <input
-                type="number"
-                className="border border-zinc-300 p-2 w-full rounded-md"
-                value={unitsPerPackage}
-                onChange={(e) => setUnitsPerPackage(parseInt(e.target.value))}
-              />
-            </div>
-            <div className="text-sm text-gray-600">
-              Auto price per piece: ₱{pricePerPiece.toFixed(2)}
-            </div>
-          </>
-        ) : (
-          <div>
-            <label className="block text-sm mb-1">Price per Piece</label>
-            <input
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <AdminInput
               type="number"
-              className="border border-zinc-300 p-2 w-full rounded-md"
+              label="Package Price (₱)"
+              placeholder="0.00"
+              value={packagePrice}
+              onChange={(e) => setPackagePrice(parseFloat(e.target.value) || 0)}
+            />
+
+            <AdminInput
+              type="number"
+              label="Units per Package"
+              placeholder="0"
+              value={unitsPerPackage}
+              onChange={(e) => setUnitsPerPackage(parseInt(e.target.value) || 0)}
+            />
+
+            <div className="flex flex-col">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Calculated Price per Piece
+              </label>
+              <div className="px-4 py-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <span className="text-lg font-semibold text-purple-800">
+                  ₱{pricePerPiece.toFixed(2)} per piece
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <AdminInput
+              type="number"
+              label="Price per Piece (₱)"
+              placeholder="0.00"
               value={pricePerPiece}
-              onChange={(e) => setPricePerPiece(parseFloat(e.target.value))}
+              onChange={(e) => setPricePerPiece(parseFloat(e.target.value) || 0)}
             />
           </div>
         )}
 
-        <div>
-          <label className="block text-sm mb-1">Initial Stock Quantity</label>
-          <input
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <AdminInput
             type="number"
-            className="border border-zinc-300 p-2 w-full rounded-md"
+            label="Initial Stock Quantity"
+            placeholder="0"
             value={stockQuantity}
-            onChange={(e) => setStockQuantity(parseInt(e.target.value))}
+            onChange={(e) => setStockQuantity(parseInt(e.target.value) || 0)}
           />
         </div>
 
-        <div className="flex gap-2 mt-2">
-          <button
-            onClick={() => {
-              setName("");
-              setIsPackage(false);
-              setPackagePrice(0);
-              setUnitsPerPackage(0);
-              setPricePerPiece(0);
-              setStockQuantity(0);
-            }}
-            className="bg-zinc-200 text-zinc-700 px-4 py-2 rounded-md hover:bg-zinc-300 transition"
+        <AdminActions>
+          <AdminButton
+            variant="secondary"
+            onClick={resetForm}
           >
             Cancel
-          </button>
-
-          <button
+          </AdminButton>
+          <AdminButton
+            variant="primary"
             onClick={handleCreateMaterial}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
           >
             Create Material
-          </button>
-        </div>
-      </div>
+          </AdminButton>
+        </AdminActions>
+      </AdminFormSection>
 
-      <table className="w-full mt-6 border border-zinc-300 text-sm bg-white rounded-md overflow-hidden">
-        <thead>
-          <tr className="text-left ">
-            <th className="p-2 text-left border-y border-zinc-300">Name</th>
-            <th className="p-2 text-left border-y border-zinc-300">
-              Price/Piece
-            </th>
-            <th className="p-2 text-left border-y border-zinc-300">Stock</th>
-            <th className="p-2 text-left border-y border-zinc-300">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {materials.map((m) => (
-            <tr key={m.id} className="border-t border-zinc-300">
-              {editingId === m.id ? (
-                <>
-                  <td className="p-2 border-y border-zinc-300">
-                    <input
-                      value={editForm.name ?? m.name}
-                      onChange={(e) => handleEditChange("name", e.target.value)}
-                      className="border border-zinc-300 p-1 w-full rounded-md"
-                    />
-                  </td>
-                  <td className="p-2 border-y border-zinc-300">
-                    <input
-                      type="number"
-                      value={editForm.pricePerPiece ?? m.pricePerPiece}
-                      onChange={(e) =>
-                        handleEditChange(
-                          "pricePerPiece",
-                          parseFloat(e.target.value)
-                        )
-                      }
-                      className="border border-zinc-300 p-1 w-full rounded-md"
-                    />
-                  </td>
-                  <td className="p-2 border-y border-zinc-300">
-                    <input
-                      type="number"
-                      value={editForm.stockQuantity ?? m.stock?.quantity ?? 0}
-                      onChange={(e) =>
-                        handleEditChange(
-                          "stockQuantity",
-                          parseInt(e.target.value)
-                        )
-                      }
-                      className="border border-zinc-300 p-1 w-full rounded-md"
-                    />
-                  </td>
-                  <td className="p-2 space-x-2 border border-zinc-300">
-                    <button
-                      onClick={saveEdit}
-                      className="text-green-600 hover:underline"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      className="text-gray-600 hover:underline"
-                    >
-                      Cancel
-                    </button>
-                  </td>
-                </>
-              ) : (
-                <>
-                  <td className="p-2 border-y border-zinc-300">{m.name}</td>
-                  <td className="p-2 border-y border-zinc-300">
-                    ₱{m.pricePerPiece.toFixed(2)}
-                  </td>
-                  <td className="p-2 border-y border-zinc-300">
-                    {m.stock?.quantity ?? 0}
-                  </td>
-                  <td className="p-2 flex gap-2  border-zinc-300">
-                    <button
-                      onClick={() => {
-                        setEditingId(m.id);
-                        setEditForm({
-                          name: m.name,
-                          pricePerPiece: m.pricePerPiece,
-                          stockQuantity: m.stock?.quantity ?? 0,
-                        });
-                      }}
-                      className="text-blue-600 hover:underline"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(m.id)}
-                      className="text-red-600 hover:underline"
-                    >
-                      <Trash size={16} />
-                    </button>
-                  </td>
-                </>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <AdminCard>
+        <div className="mb-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-2">All Materials</h3>
+          <p className="text-gray-600">Manage and edit your existing materials</p>
+        </div>
+        <AdminTable
+          columns={tableColumns}
+          data={materials}
+          emptyMessage="No materials found. Create your first material above."
+        />
+      </AdminCard>
     </div>
   );
 }
