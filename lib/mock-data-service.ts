@@ -928,16 +928,84 @@ export const mockDataService = {
     return false;
   },
 
-  // Dashboard stats
+  // Dashboard stats with enhanced filtering
   async getDashboardStats(filters?: any) {
     console.log('Getting dashboard stats with filters:', filters);
     
-    // Get current data
+    const filter = filters?.filter || 'all';
+    const selectedMonth = filters?.selectedMonth;
+    const startDate = filters?.startDate;
+    const endDate = filters?.endDate;
+    
+    // Helper function to filter orders by date range
+    const getFilteredOrders = () => {
+      const now = new Date();
+      
+      switch (filter) {
+        case 'today':
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          return ordersStorage.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return orderDate >= today && orderDate < tomorrow;
+          });
+          
+        case 'week':
+          const weekStart = new Date();
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of week (Sunday)
+          weekStart.setHours(0, 0, 0, 0);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 7);
+          return ordersStorage.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return orderDate >= weekStart && orderDate < weekEnd;
+          });
+          
+        case 'month':
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+          return ordersStorage.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return orderDate >= monthStart && orderDate < monthEnd;
+          });
+          
+        case 'selected_month':
+          if (!selectedMonth) return ordersStorage;
+          const [year, month] = selectedMonth.split('-').map(Number);
+          const selectedMonthStart = new Date(year, month - 1, 1);
+          const selectedMonthEnd = new Date(year, month, 1);
+          return ordersStorage.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return orderDate >= selectedMonthStart && orderDate < selectedMonthEnd;
+          });
+          
+        case 'date_range':
+          if (!startDate || !endDate) return ordersStorage;
+          const rangeStart = new Date(startDate);
+          rangeStart.setHours(0, 0, 0, 0);
+          const rangeEnd = new Date(endDate);
+          rangeEnd.setHours(23, 59, 59, 999);
+          return ordersStorage.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return orderDate >= rangeStart && orderDate <= rangeEnd;
+          });
+          
+        default: // 'all'
+          return ordersStorage;
+      }
+    };
+    
+    const filteredOrders = getFilteredOrders();
+    const filteredRevenue = filteredOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+    
+    // Get all-time data for comparison
     const totalOrders = ordersStorage.length;
     const totalRevenue = ordersStorage.reduce((sum, order) => sum + (order.total || 0), 0);
     const cashBalance = cashDrawerBalance;
     
-    // Calculate today's data
+    // Calculate today's data for specific metrics
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayOrders = ordersStorage.filter(order => {
@@ -946,51 +1014,105 @@ export const mockDataService = {
     });
     const todayRevenue = todayOrders.reduce((sum, order) => sum + (order.total || 0), 0);
     
-    // Calculate this month vs last month
-    const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    
-    const thisMonthOrders = ordersStorage.filter(order => {
-      const orderDate = new Date(order.createdAt);
-      return orderDate >= thisMonth && orderDate < nextMonth;
-    });
-    const lastMonthOrders = ordersStorage.filter(order => {
-      const orderDate = new Date(order.createdAt);
-      return orderDate >= lastMonth && orderDate < thisMonth;
-    });
-    
-    const thisMonthSales = thisMonthOrders.reduce((sum, order) => sum + (order.total || 0), 0);
-    const lastMonthSales = lastMonthOrders.reduce((sum, order) => sum + (order.total || 0), 0);
-    
-    const trendPercent = lastMonthSales > 0 
-      ? Math.round(((thisMonthSales - lastMonthSales) / lastMonthSales) * 100)
-      : 0;
-    
-    // Generate mock chart data
-    const monthlyData = [];
-    for (let i = 5; i >= 0; i--) {
-      const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const monthOrders = ordersStorage.filter(order => {
-        const orderDate = new Date(order.createdAt);
-        return orderDate.getMonth() === month.getMonth() && 
-               orderDate.getFullYear() === month.getFullYear();
-      });
-      monthlyData.push({
-        month: month.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        total: monthOrders.reduce((sum, order) => sum + (order.total || 0), 0)
-      });
+    // Calculate trend (compare with previous period)
+    let previousPeriodOrders = [];
+    switch (filter) {
+      case 'today':
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const dayAfterYesterday = new Date(yesterday);
+        dayAfterYesterday.setDate(dayAfterYesterday.getDate() + 1);
+        previousPeriodOrders = ordersStorage.filter(order => {
+          const orderDate = new Date(order.createdAt);
+          return orderDate >= yesterday && orderDate < dayAfterYesterday;
+        });
+        break;
+      case 'week':
+        const prevWeekStart = new Date();
+        prevWeekStart.setDate(prevWeekStart.getDate() - prevWeekStart.getDay() - 7);
+        prevWeekStart.setHours(0, 0, 0, 0);
+        const prevWeekEnd = new Date(prevWeekStart);
+        prevWeekEnd.setDate(prevWeekEnd.getDate() + 7);
+        previousPeriodOrders = ordersStorage.filter(order => {
+          const orderDate = new Date(order.createdAt);
+          return orderDate >= prevWeekStart && orderDate < prevWeekEnd;
+        });
+        break;
+      case 'month':
+        const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 1);
+        previousPeriodOrders = ordersStorage.filter(order => {
+          const orderDate = new Date(order.createdAt);
+          return orderDate >= prevMonthStart && orderDate < prevMonthEnd;
+        });
+        break;
+      default:
+        previousPeriodOrders = [];
     }
     
-    // Generate hourly data
+    const previousRevenue = previousPeriodOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+    const trendPercent = previousRevenue > 0 
+      ? Math.round(((filteredRevenue - previousRevenue) / previousRevenue) * 100)
+      : filteredRevenue > 0 ? 100 : 0;
+    
+    // Generate chart data based on filtered orders
+    const getChartData = () => {
+      if (filter === 'all') {
+        // Monthly data for all-time
+        const monthlyData = [];
+        for (let i = 5; i >= 0; i--) {
+          const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
+          const monthOrders = ordersStorage.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return orderDate.getMonth() === month.getMonth() && 
+                   orderDate.getFullYear() === month.getFullYear();
+          });
+          monthlyData.push({
+            month: month.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+            total: monthOrders.reduce((sum, order) => sum + (order.total || 0), 0)
+          });
+        }
+        return monthlyData;
+      } else {
+        // Daily breakdown for specific periods
+        const dailyData = [];
+        const startOfPeriod = filteredOrders.length > 0 
+          ? new Date(Math.min(...filteredOrders.map(o => new Date(o.createdAt).getTime())))
+          : new Date();
+        const endOfPeriod = filteredOrders.length > 0
+          ? new Date(Math.max(...filteredOrders.map(o => new Date(o.createdAt).getTime())))
+          : new Date();
+        
+        for (let d = new Date(startOfPeriod); d <= endOfPeriod; d.setDate(d.getDate() + 1)) {
+          const dayOrders = filteredOrders.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return orderDate.toDateString() === d.toDateString();
+          });
+          dailyData.push({
+            month: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            total: dayOrders.reduce((sum, order) => sum + (order.total || 0), 0)
+          });
+        }
+        return dailyData.slice(0, 10); // Limit to 10 data points for readability
+      }
+    };
+    
+    // Generate hourly data from filtered orders
+    const formatHour = (hour: number) => {
+      if (hour === 0) return '12:00 AM';
+      if (hour === 12) return '12:00 PM';
+      if (hour < 12) return `${hour}:00 AM`;
+      return `${hour - 12}:00 PM`;
+    };
+
     const hourlyData = [];
     for (let hour = 0; hour < 24; hour++) {
-      const hourOrders = ordersStorage.filter(order => {
+      const hourOrders = filteredOrders.filter(order => {
         const orderDate = new Date(order.createdAt);
         return orderDate.getHours() === hour;
       });
       hourlyData.push({
-        hour: `${hour}:00`,
+        hour: formatHour(hour),
         total: hourOrders.reduce((sum, order) => sum + (order.total || 0), 0)
       });
     }
@@ -999,14 +1121,14 @@ export const mockDataService = {
       stats: {
         all_time_earning: totalRevenue,
         all_time_products_sold: totalOrders,
-        this_month_sales: thisMonthSales,
-        last_month_sales: lastMonthSales,
+        this_month_sales: filteredRevenue,
+        last_month_sales: previousRevenue,
         trend: trendPercent >= 0 ? 'up' : 'down',
         trend_percent: Math.abs(trendPercent),
         best_product: 'Iced Coffee',
-        least_product: 'Mac and Cheese',
-        busiest_hour: '14:00',
-        least_hour: '06:00',
+        worst_product: 'Mac and Cheese',
+        busiest_hour: '2:00 PM - 3:00 PM',
+        slowest_hour: '6:00 AM - 7:00 AM',
         cashDrawerBalance: cashBalance,
         todayInflow: todayRevenue,
         todayOutflow: 0,
@@ -1014,17 +1136,19 @@ export const mockDataService = {
         totalOrders: totalOrders,
         todayOrders: todayOrders.length,
         lowStockItems: 0,
-        totalRevenue: totalRevenue
+        totalRevenue: filter === 'all' ? totalRevenue : filteredRevenue,
+        filteredOrders: filteredOrders.length,
+        filteredRevenue: filteredRevenue
       },
-      monthly: monthlyData,
+      monthly: getChartData(),
       hours: hourlyData,
       products: [
-        { product: 'Iced Coffee', quantity: Math.floor(totalOrders * 0.3) },
-        { product: 'Hot Coffee', quantity: Math.floor(totalOrders * 0.2) },
-        { product: 'Fusion Matcha', quantity: Math.floor(totalOrders * 0.15) },
-        { product: 'Float Series', quantity: Math.floor(totalOrders * 0.1) }
+        { product: 'Iced Coffee', quantity: Math.floor(filteredOrders.length * 0.3) },
+        { product: 'Hot Coffee', quantity: Math.floor(filteredOrders.length * 0.2) },
+        { product: 'Fusion Matcha', quantity: Math.floor(filteredOrders.length * 0.15) },
+        { product: 'Float Series', quantity: Math.floor(filteredOrders.length * 0.1) }
       ],
-      all_time_daily: ordersStorage.map(order => ({
+      all_time_daily: filteredOrders.map(order => ({
         date: order.createdAt || new Date().toISOString(),
         total: order.total || 0
       }))

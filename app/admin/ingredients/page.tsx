@@ -56,6 +56,10 @@ export default function IngredientsAdminPage() {
     setStockQuantity(0);
   };
 
+  const isFormValid = () => {
+    return name.trim() !== "" && pricePerPurchase > 0 && unitsPerPurchase > 0;
+  };
+
   const handleCreateIngredient = async () => {
     try {
       const payload: IngredientInput = {
@@ -273,6 +277,7 @@ export default function IngredientsAdminPage() {
           <AdminButton
             variant="primary"
             onClick={handleCreateIngredient}
+            disabled={!isFormValid()}
           >
             Create Ingredient
           </AdminButton>

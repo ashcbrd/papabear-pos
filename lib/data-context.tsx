@@ -3,11 +3,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { androidDatabaseService } from './android-database';
 import { mockDataService } from './mock-data-service';
+import { sqliteDataService } from './sqlite-data-service';
+import { dataMigration } from './data-migration';
 import { initializeSampleData } from './seed-data';
 import LoadingScreen from '@/components/loading-screen';
 
-// Use mock service with localStorage persistence (works on Android WebView)
-const currentDataService = mockDataService;
+// Use SQLite for better performance and data integrity
+const currentDataService = sqliteDataService;
 
 interface DataContextType {
   isInitialized: boolean;
@@ -98,18 +100,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('Starting data initialization...');
       
-      // Initialize data storage
-      console.log('Initializing data storage...');
+      // Check if migration is needed
+      const dataExists = await dataMigration.checkDataExists();
+      console.log('Data existence check:', dataExists);
       
-      // Load only essential data for POS functionality
+      if (dataExists.localStorage && !dataExists.sqlite) {
+        console.log('Migrating data from localStorage to SQLite...');
+        const migrationResult = await dataMigration.migrateAllData();
+        console.log('Migration result:', migrationResult);
+        
+        if (migrationResult.success) {
+          console.log('Migration successful, clearing localStorage...');
+          await dataMigration.clearLocalStorageData();
+        }
+      }
+      
+      // Load all data for admin functionality
       await loadProducts();
       await loadAddons();
       await loadOrders();
-      await loadFlavors(); // Add flavors loading
+      await loadFlavors();
+      await loadIngredients();
+      await loadMaterials();
       
-      // Set empty arrays for other data to avoid loading issues
-      setIngredients([]);
-      setMaterials([]);
+      // Set empty arrays for stock (will be managed internally)
       setStock([]);
       
       console.log('Data initialization complete');

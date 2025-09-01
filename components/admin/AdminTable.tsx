@@ -26,7 +26,7 @@ export default function AdminTable({
     return (
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="p-8 text-center">
-          <div className="animate-spin h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full mx-auto mb-4" />
+          <div className="animate-spin h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full mx-auto mb-4" />
           <p className="text-gray-500">Loading...</p>
         </div>
       </div>
@@ -69,7 +69,7 @@ export default function AdminTable({
               <tr
                 key={rowIndex}
                 className={`
-                  hover:bg-gradient-to-r hover:from-amber-50 hover:to-orange-50 
+                  hover:bg-gradient-to-r hover:from-emerald-50 hover:to-emerald-50 
                   transition-colors duration-200
                   ${onRowClick ? 'cursor-pointer' : ''}
                 `}

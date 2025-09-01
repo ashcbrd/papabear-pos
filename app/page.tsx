@@ -42,7 +42,7 @@ export default function Home() {
               <div className="space-y-4">
                 <div className="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-medium">
                   <Star className="w-4 h-4 mr-2" />
-                  Premium Point of Sale Solution
+                  Point of Sale Solution
                 </div>
                 <h1 className="text-5xl lg:text-7xl font-bold leading-tight">
                   <span className="bg-gradient-to-r from-green-600 via-emerald-600 to-green-600 bg-clip-text text-transparent">
@@ -51,18 +51,13 @@ export default function Home() {
                   <br />
                   <span className="text-neutral-900">Café POS</span>
                 </h1>
-                <p className="text-xl text-neutral-600 leading-relaxed max-w-lg">
-                  Streamline your café operations with our modern, intuitive
-                  point-of-sale system. Built for efficiency, designed for
-                  growth.
-                </p>
               </div>
 
               {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col  gap-4">
                 <button
                   onClick={() => router.push("/pos")}
-                  className="group relative overflow-hidden bg-gradient-to-r from-green-500 to-green-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-300"
+                  className="group relative overflow-hidden bg-gradient-to-r from-green-500 to-green-600 text-white p-8 rounded-2xl font-semibold text-lg shadow-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-300"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-green-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   <div className="relative flex items-center justify-center space-x-2">
@@ -74,7 +69,7 @@ export default function Home() {
 
                 <button
                   onClick={() => router.push("/admin/dashboard")}
-                  className="group bg-white border-2 border-neutral-200 text-neutral-700 px-8 py-4 rounded-2xl font-semibold text-lg hover:border-neutral-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300"
+                  className="group bg-white border-2 border-neutral-200 text-neutral-700 p-8 rounded-2xl font-semibold text-lg hover:border-neutral-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300"
                 >
                   <div className="flex items-center justify-center space-x-2">
                     <Settings className="w-6 h-6" />

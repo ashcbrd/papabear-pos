@@ -18,6 +18,7 @@ import OrderConfirmationDialog from "@/components/order-confirmation-dialog";
 import CustomSelect from "@/components/custom-select";
 import { useToast } from "@/components/toast-context";
 import { useData } from "@/lib/data-context";
+import { formatDate } from "@/lib/date-utils";
 import { LayoutGrid, Utensils, Coffee, Zap, ChevronLeft } from "lucide-react";
 import LongPressServeButton from "@/components/long-press-serve-button";
 
@@ -485,7 +486,7 @@ export default function ModernPOSPage() {
                   </span>
                 </div>
                 <div className="badge badge-neutral">
-                  {new Date().toLocaleDateString()}
+                  {formatDate(new Date())}
                 </div>
               </div>
             </div>
@@ -750,8 +751,8 @@ export default function ModernPOSPage() {
           {/* Main Content Area */}
           <div className="lg:col-span-2 space-y-6">
             {/* Controls Section */}
-            <div className="card p-6">
-              <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+            <div className="card p-6 flex flex-col">
+              <div className="flex flex-col gap-4 items-start lg:items-center justify-between">
                 {/* Category Filters */}
                 <div className="flex flex-wrap gap-2">
                   {categories.map((cat) => (
@@ -779,7 +780,7 @@ export default function ModernPOSPage() {
                 </div>
 
                 {/* Search */}
-                <div className="w-full lg:w-auto relative">
+                <div className="w-full  relative">
                   <Search
                     size={18}
                     className="absolute left-3 top-3 text-neutral-400"
@@ -789,7 +790,7 @@ export default function ModernPOSPage() {
                     placeholder="Search products..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="input pl-10 lg:w-64"
+                    className="input pl-10 w-full"
                   />
                 </div>
               </div>
@@ -1052,7 +1053,7 @@ export default function ModernPOSPage() {
 
           {/* Desktop Cart Sidebar */}
           <div className="hidden lg:block lg:col-span-1">
-            <div className="card sticky top-24">
+            <div className="card sticky top-24 rounded-b-xl">
               {/* Cart Header */}
               <div className="p-6 border-b border-neutral-200">
                 <h2 className="text-lg font-bold text-neutral-900">
@@ -1196,7 +1197,7 @@ export default function ModernPOSPage() {
 
               {/* Cart Total */}
               {orderItems.length > 0 && (
-                <div className="border-t border-neutral-200 bg-neutral-50 p-6">
+                <div className="border-t border-neutral-200 bg-neutral-50 p-6 rounded-b-xl">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-lg font-semibold text-neutral-900">
                       Total
@@ -1365,7 +1366,7 @@ export default function ModernPOSPage() {
       {/* Payment Modal */}
       {showDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+          <div className="bg-white relative h-full rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
             {/* Payment Header */}
             <div className="p-6 border-b border-neutral-200 ">
               <h2 className="text-xl font-bold text-neutral-900">
@@ -1463,7 +1464,7 @@ export default function ModernPOSPage() {
             </div>
 
             {/* Payment Actions */}
-            <div className="border-t border-neutral-200 bg-neutral-50 p-6 flex gap-3">
+            <div className="border-t absolute bottom-0 w-full border-neutral-200 bg-neutral-50 p-6 flex gap-3">
               <button
                 onClick={() => setShowDialog(false)}
                 className="btn btn-secondary btn-lg flex-1"

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Palette, Pencil, Trash, Plus } from "lucide-react";
 import { useData } from "@/lib/data-context";
+import { formatDate } from "@/lib/date-utils";
 import {
   AdminPageHeader,
   AdminFormSection,
@@ -19,11 +20,26 @@ interface Flavor {
   createdAt: string;
 }
 
+const PAPA_BEAR_FLAVORS = [
+  "Americano", "Cinnamon", "Salted Caramel", "Creamy Vanilla", "Mocha", "Honeycomb Latte", 
+  "Tiramisu", "Caramel Macchiato", "Spanish Latte", "Matcha Latte", "Matcha Caramel", 
+  "Mango Matcha Latte", "Strawberry Matcha Latte", "Blueberry Matcha Latte", "Coffee Float", 
+  "Strawberry Float", "Blueberry Float", "Sprite Float", "Coke Float", "Matcha Float", 
+  "Kiwi Will Rock You", "Blueberry Licious", "Tipsy Strawberry", "Edi Wow Grape", 
+  "Mango Tango", "Honey Orange Ginger", "Okinawa", "Taro", "Wintermelon", "Red Velvet", 
+  "Cookies and Cream", "Chocolate", "Mango Cheesecake", "Matcha", "Minty Matcha", 
+  "Choco Mint", "Blueberry Graham", "Mango Graham", "Avocado Graham", "Cookies and Cream Graham", 
+  "Dark Chocolate S'mores", "Matcha S'mores", "Red Velvet S'mores", "Caramel Macchiato S'mores", 
+  "Cookies and Cream S'mores", "Lemonade", "Tropical Berry Lemon", "Kiwi Lemonade", 
+  "Honey Lemon", "Hot Choco"
+];
+
 export default function FlavorsAdminPage() {
   const { flavors, createFlavor, updateFlavor, deleteFlavor } = useData();
   
   const [name, setName] = useState("");
   const [editingFlavorId, setEditingFlavorId] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const resetForm = () => {
     setEditingFlavorId(null);
@@ -41,6 +57,30 @@ export default function FlavorsAdminPage() {
     } catch (error) {
       console.error("Save failed:", error);
       alert("Save failed");
+    }
+  };
+
+  const handleBulkImport = async () => {
+    if (!confirm("This will delete all existing flavors and import the Papa Bear flavor list. Continue?")) return;
+    
+    setIsImporting(true);
+    try {
+      // Delete all existing flavors
+      for (const flavor of flavors) {
+        await deleteFlavor(flavor.id);
+      }
+      
+      // Add all Papa Bear flavors
+      for (const flavorName of PAPA_BEAR_FLAVORS) {
+        await createFlavor({ name: flavorName });
+      }
+      
+      alert(`Successfully imported ${PAPA_BEAR_FLAVORS.length} flavors!`);
+    } catch (error) {
+      console.error("Bulk import failed:", error);
+      alert("Bulk import failed. Please try again.");
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -75,7 +115,7 @@ export default function FlavorsAdminPage() {
       accessor: 'createdAt',
       cell: (row: Flavor) => (
         <span className="text-gray-600">
-          {new Date(row.createdAt).toLocaleDateString()}
+          {formatDate(row.createdAt)}
         </span>
       )
     },
@@ -111,6 +151,16 @@ export default function FlavorsAdminPage() {
         title="Flavors"
         icon={<Palette size={24} />}
         description="Manage available flavors for your products"
+        actions={
+          <AdminButton
+            variant="primary"
+            onClick={handleBulkImport}
+            disabled={isImporting}
+            icon={<Plus size={16} />}
+          >
+            {isImporting ? "Importing..." : "Import Papa Bear Flavors"}
+          </AdminButton>
+        }
       />
 
       <AdminFormSection

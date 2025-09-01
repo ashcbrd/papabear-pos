@@ -22,6 +22,10 @@ export default function AddonsAdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<AddonInput>>({});
 
+  const isFormValid = () => {
+    return name.trim() !== "" && price > 0;
+  };
+
   const handleCreateAddon = async () => {
     try {
       const payload = { name, price, stockQuantity };
@@ -174,6 +178,7 @@ export default function AddonsAdminPage() {
           <AdminButton
             variant="primary"
             onClick={handleCreateAddon}
+            disabled={!isFormValid()}
           >
             Create Add-on
           </AdminButton>

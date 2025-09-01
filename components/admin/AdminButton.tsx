@@ -28,11 +28,11 @@ export default function AdminButton({
   };
 
   const variantClasses = {
-    primary: 'bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700 focus:ring-amber-500/50 shadow-lg hover:shadow-xl',
+    primary: 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 focus:ring-emerald-500/50 shadow-lg hover:shadow-xl',
     secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500/50 border border-gray-200',
     danger: 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 focus:ring-red-500/50 shadow-lg hover:shadow-xl',
     success: 'bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 focus:ring-emerald-500/50 shadow-lg hover:shadow-xl',
-    outline: 'border-2 border-amber-500 text-amber-600 hover:bg-amber-50 focus:ring-amber-500/50'
+    outline: 'border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50 focus:ring-emerald-500/50'
   };
 
   const widthClass = fullWidth ? 'w-full' : '';

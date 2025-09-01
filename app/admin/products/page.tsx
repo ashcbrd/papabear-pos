@@ -50,7 +50,7 @@ const getSizeOptionsForCategory = (category: Category): SizeName[] => {
 };
 
 interface FlavorInput {
-  name: FlavorName;
+  name: string;
 }
 
 interface SizeInput {
@@ -67,7 +67,7 @@ interface Product {
   imageUrl: string | null;
   flavors: {
     id: string;
-    name: FlavorName;
+    name: string;
   }[];
   sizes: {
     id: string;
@@ -79,7 +79,7 @@ interface Product {
 }
 
 export default function ProductsAdminPage() {
-  const { products, materials, ingredients, createProduct, updateProduct, deleteProduct } = useData();
+  const { products, materials, ingredients, flavors: dynamicFlavors, createProduct, updateProduct, deleteProduct } = useData();
   const [name, setName] = useState("");
   const [category, setCategory] = useState<Category>("Meals");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -102,6 +102,12 @@ export default function ProductsAdminPage() {
     setImageUrl(null);
     setFlavors([]);
     setSizes([]);
+  };
+
+  const isFormValid = () => {
+    if (!name.trim()) return false;
+    if (sizes.length === 0) return false;
+    return sizes.some(size => size.price > 0);
   };
 
   const handleSave = async () => {
@@ -184,7 +190,7 @@ export default function ProductsAdminPage() {
       header: 'Category',
       accessor: 'category',
       cell: (row: any) => (
-        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
           {row.category.replace(/([a-z])([A-Z])/g, '$1 $2')}
         </span>
       )
@@ -290,12 +296,14 @@ export default function ProductsAdminPage() {
                 size="sm"
                 variant="outline"
                 icon={<Plus size={16} />}
-                disabled={flavors.length >= allFlavorOptions.length}
+                disabled={flavors.length >= dynamicFlavors.length}
                 onClick={() => {
-                  const name = allFlavorOptions.find(
-                    (opt) => !flavors.some((f) => f.name === opt)
-                  )!;
-                  setFlavors([...flavors, { name }]);
+                  const availableFlavor = dynamicFlavors.find(
+                    (flavor) => !flavors.some((f) => f.name === flavor.name)
+                  );
+                  if (availableFlavor) {
+                    setFlavors([...flavors, { name: availableFlavor.name }]);
+                  }
                 }}
               >
                 Add Flavor
@@ -309,6 +317,7 @@ export default function ProductsAdminPage() {
                 flavor={flavor}
                 flavors={flavors}
                 setFlavors={setFlavors}
+                dynamicFlavors={dynamicFlavors}
               />
             ))}
           </div>
@@ -361,6 +370,7 @@ export default function ProductsAdminPage() {
           <AdminButton
             variant="primary"
             onClick={handleSave}
+            disabled={!isFormValid()}
           >
             {editingProductId ? "Update Product" : "Create Product"}
           </AdminButton>
@@ -387,11 +397,13 @@ function FlavorEditor({
   flavor,
   flavors,
   setFlavors,
+  dynamicFlavors,
 }: {
   idx: number;
   flavor: FlavorInput;
   flavors: FlavorInput[];
   setFlavors: React.Dispatch<React.SetStateAction<FlavorInput[]>>;
+  dynamicFlavors: any[];
 }) {
   const update = (f: FlavorInput) =>
     setFlavors(flavors.map((x, i) => (i === idx ? f : x)));
@@ -402,13 +414,13 @@ function FlavorEditor({
         <AdminSelect
           label="Flavor"
           value={flavor.name}
-          onChange={(e) => update({ ...flavor, name: e.target.value as FlavorName })}
-          options={allFlavorOptions
+          onChange={(e) => update({ ...flavor, name: e.target.value })}
+          options={dynamicFlavors
             .filter(
-              (opt) =>
-                opt === flavor.name || !flavors.some((f) => f.name === opt)
+              (dynamicFlavor) =>
+                dynamicFlavor.name === flavor.name || !flavors.some((f) => f.name === dynamicFlavor.name)
             )
-            .map((opt) => ({ label: opt, value: opt }))}
+            .map((dynamicFlavor) => ({ label: dynamicFlavor.name, value: dynamicFlavor.name }))}
           fullWidth={false}
           className="w-40"
         />
@@ -488,7 +500,9 @@ function SizeEditor({
         </div>
       </div>
 
-      {category !== "Meals" && (
+      <div className="mt-6">
+        <h5 className="text-sm font-semibold text-gray-700 mb-3">Inventory Tracking (Optional)</h5>
+        <p className="text-xs text-gray-500 mb-4">Add materials and ingredients used for this size to automatically deduct stock when sold.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <NestedSelectors
             title="Materials"
@@ -503,12 +517,12 @@ function SizeEditor({
             onChange={(items) => update({ ...size, ingredients: items })}
           />
         </div>
-      )}
+      </div>
     </AdminCard>
   );
 }
 
-function NestedSelectors<T extends { id: string; name: string }>({
+function NestedSelectors<T extends { id: string; name: string; measurementUnit?: string; pricePerPiece?: number }>({
   title,
   items,
   all,
@@ -519,6 +533,12 @@ function NestedSelectors<T extends { id: string; name: string }>({
   all: T[];
   onChange: (items: { id: string; quantity: number }[]) => void;
 }) {
+  const getUnit = (item: T) => {
+    if ('measurementUnit' in item && item.measurementUnit) {
+      return item.measurementUnit;
+    }
+    return 'piece';
+  };
   return (
     <div className="space-y-4">
       <div>
@@ -543,20 +563,36 @@ function NestedSelectors<T extends { id: string; name: string }>({
             const found = all.find((x) => x.id === it.id);
             return (
               <div key={it.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
-                <span className="flex-1 text-sm font-medium text-gray-900">
-                  {found?.name || "Unknown"}
-                </span>
-                <AdminInput
-                  type="number"
-                  value={it.quantity}
-                  onChange={(e) => {
-                    const arr = [...items];
-                    arr[i].quantity = parseFloat(e.target.value) || 0;
-                    onChange(arr);
-                  }}
-                  fullWidth={false}
-                  className="w-20"
-                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-gray-900">
+                    {found?.name || "Unknown"}
+                  </span>
+                  {found && (
+                    <p className="text-xs text-gray-500">
+                      Unit: {getUnit(found)}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <AdminInput
+                    type="number"
+                    step="0.1"
+                    placeholder="0"
+                    value={it.quantity}
+                    onChange={(e) => {
+                      const arr = [...items];
+                      arr[i].quantity = parseFloat(e.target.value) || 0;
+                      onChange(arr);
+                    }}
+                    fullWidth={false}
+                    className="w-20"
+                  />
+                  {found && (
+                    <span className="text-xs text-gray-500 min-w-[40px]">
+                      {getUnit(found)}
+                    </span>
+                  )}
+                </div>
                 <AdminButton
                   size="sm"
                   variant="danger"

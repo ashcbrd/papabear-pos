@@ -60,7 +60,7 @@ export default function AdminSelect({
     flex items-center justify-between
     ${error 
       ? 'border-red-300 focus:border-red-500 focus:ring-red-500/25' 
-      : 'border-gray-200 focus:border-amber-500 focus:ring-amber-500/25 hover:border-gray-300'
+      : 'border-gray-200 focus:border-emerald-500 focus:ring-emerald-500/25 hover:border-gray-300'
     }
     ${disabled ? 'bg-gray-50 cursor-not-allowed opacity-60' : ''}
     ${icon ? 'pl-12' : ''}
@@ -112,15 +112,15 @@ export default function AdminSelect({
                     key={option.value}
                     type="button"
                     className={`
-                      w-full px-4 py-3 text-left hover:bg-amber-50 transition-colors duration-150
+                      w-full px-4 py-3 text-left hover:bg-emerald-50 transition-colors duration-150
                       flex items-center justify-between group
-                      ${value === option.value ? 'bg-amber-50 text-amber-900' : 'text-gray-900'}
+                      ${value === option.value ? 'bg-emerald-50 text-emerald-900' : 'text-gray-900'}
                     `}
                     onClick={() => handleSelect(option.value)}
                   >
                     <span className="font-medium">{option.label}</span>
                     {value === option.value && (
-                      <Check className="w-4 h-4 text-amber-600" />
+                      <Check className="w-4 h-4 text-emerald-600" />
                     )}
                   </button>
                 ))

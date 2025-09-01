@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import CustomSelect from "@/components/custom-select";
 import { ClipboardList, Calendar, Filter } from "lucide-react";
 import { useData } from "@/lib/data-context";
+import { formatDateTime } from "@/lib/date-utils";
 import {
   AdminPageHeader,
   AdminCard,
@@ -137,7 +138,7 @@ export default function AdminOrdersPage() {
                   <div className="flex items-center gap-2">
                     <Calendar size={16} className="text-gray-400" />
                     <span className="text-sm text-gray-600">
-                      {new Date(order.createdAt).toLocaleString()}
+                      {formatDateTime(order.createdAt)}
                     </span>
                   </div>
                 </div>
@@ -203,9 +204,9 @@ export default function AdminOrdersPage() {
                     <div className="text-lg font-bold text-green-900">₱{order.paid?.toFixed(2) || '0.00'}</div>
                     <div className="text-sm text-green-600">Paid</div>
                   </div>
-                  <div className="bg-amber-50 p-3 rounded-lg">
-                    <div className="text-lg font-bold text-amber-900">₱{order.change?.toFixed(2) || '0.00'}</div>
-                    <div className="text-sm text-amber-600">Change</div>
+                  <div className="bg-emerald-50 p-3 rounded-lg">
+                    <div className="text-lg font-bold text-emerald-900">₱{order.change?.toFixed(2) || '0.00'}</div>
+                    <div className="text-sm text-emerald-600">Change</div>
                   </div>
                 </div>
               </div>

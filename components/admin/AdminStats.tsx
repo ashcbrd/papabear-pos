@@ -54,12 +54,12 @@ export function AdminStat({
           )}
         </div>
         {icon && (
-          <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-xl shadow-lg">
+          <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl shadow-lg">
             {icon}
           </div>
         )}
       </div>
-      <div className="absolute -bottom-2 -right-2 w-20 h-20 bg-gradient-to-br from-amber-500/10 to-orange-600/10 rounded-full blur-xl" />
+      <div className="absolute -bottom-2 -right-2 w-20 h-20 bg-gradient-to-br from-emerald-500/10 to-emerald-600/10 rounded-full blur-xl" />
     </AdminCard>
   );
 }

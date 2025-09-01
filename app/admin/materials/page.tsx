@@ -42,6 +42,15 @@ export default function MaterialsAdminPage() {
     setStockQuantity(0);
   };
 
+  const isFormValid = () => {
+    if (!name.trim()) return false;
+    if (isPackage) {
+      return packagePrice > 0 && unitsPerPackage > 0;
+    } else {
+      return pricePerPiece > 0;
+    }
+  };
+
   const handleCreateMaterial = async () => {
     try {
       const payload: MaterialInput = {
@@ -216,7 +225,7 @@ export default function MaterialsAdminPage() {
                 type="checkbox"
                 checked={isPackage}
                 onChange={(e) => setIsPackage(e.target.checked)}
-                className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500"
+                className="w-4 h-4 text-emerald-600 bg-gray-100 border-gray-300 rounded focus:ring-emerald-500"
               />
               <div className="flex items-center gap-2">
                 <Package className="w-4 h-4 text-purple-600" />
@@ -287,6 +296,7 @@ export default function MaterialsAdminPage() {
           <AdminButton
             variant="primary"
             onClick={handleCreateMaterial}
+            disabled={!isFormValid()}
           >
             Create Material
           </AdminButton>

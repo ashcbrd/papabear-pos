@@ -17,7 +17,9 @@
       "Bash(npx tsx:*)",
       "Bash(adb logcat:*)",
       "Bash(adb:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(npx shadcn@latest add:*)"
     ],
     "deny": [],
     "ask": []

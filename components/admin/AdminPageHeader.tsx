@@ -18,7 +18,7 @@ export default function AdminPageHeader({
       <div className="flex flex-col">
         <div className="flex items-center gap-3 mb-2">
           {icon && (
-            <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-xl shadow-md">
+            <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl shadow-md">
               {icon}
             </div>
           )}

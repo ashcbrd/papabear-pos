@@ -25,7 +25,7 @@ const AdminInput = forwardRef<HTMLInputElement, AdminInputProps>(({
     focus:outline-none focus:ring-4 focus:ring-offset-1
     ${error 
       ? 'border-red-300 focus:border-red-500 focus:ring-red-500/25' 
-      : 'border-gray-200 focus:border-amber-500 focus:ring-amber-500/25 hover:border-gray-300'
+      : 'border-gray-200 focus:border-emerald-500 focus:ring-emerald-500/25 hover:border-gray-300'
     }
     ${icon ? 'pl-12' : ''}
     ${className}
