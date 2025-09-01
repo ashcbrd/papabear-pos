@@ -845,5 +845,9 @@ class AndroidDatabaseService implements DatabaseService {
   }
 }
 
+class WebDatabaseService extends AndroidDatabaseService {
+  // Web-specific overrides can be added here if needed
+}
+
 // Create singleton instance
 export const databaseService = new WebDatabaseService();

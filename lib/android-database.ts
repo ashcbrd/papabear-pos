@@ -1,10 +1,7 @@
-// Android-compatible database service with Capacitor SQLite
-import {
-  CapacitorSQLite,
-  SQLiteConnection,
-  SQLiteDBConnection,
-} from "@capacitor-community/sqlite";
+// Android-compatible database service with improved Capacitor SQLite
 import { Capacitor } from "@capacitor/core";
+import { sqliteService } from "./sqlite-service";
+import { DebugLogger } from "./debug-logger";
 
 export interface DatabaseService {
   initializeDatabase: () => Promise<void>;
@@ -36,24 +33,18 @@ export interface DatabaseService {
 }
 
 class AndroidDatabaseService implements DatabaseService {
-  private sqliteConnection: SQLiteConnection;
-  private db: SQLiteDBConnection | null = null;
   private isInitialized = false;
-  private readonly DB_NAME = "papabear_pos.db";
-  private readonly DB_VERSION = 1;
-
-  constructor() {
-    this.sqliteConnection = new SQLiteConnection(CapacitorSQLite);
-  }
 
   async initializeDatabase(): Promise<void> {
     if (this.isInitialized) return;
 
     try {
       if (Capacitor.isNativePlatform()) {
-        await this.initializeSQLiteDatabase();
+        await sqliteService.initialize();
+        console.log("Android SQLite database initialized successfully");
       } else {
         await this.initializeWebStorage();
+        console.log("Web storage fallback initialized");
       }
       this.isInitialized = true;
     } catch (error) {
@@ -62,123 +53,10 @@ class AndroidDatabaseService implements DatabaseService {
     }
   }
 
-  private async initializeSQLiteDatabase(): Promise<void> {
-    try {
-      // Create connection
-      this.db = await this.sqliteConnection.createConnection(
-        this.DB_NAME,
-        false,
-        "no-encryption",
-        this.DB_VERSION,
-        false
-      );
-
-      await this.db.open();
-      await this.createTables();
-      console.log("SQLite database initialized successfully");
-    } catch (error) {
-      console.error("SQLite initialization error:", error);
-      throw error;
-    }
-  }
-
-  private async createTables(): Promise<void> {
-    if (!this.db) throw new Error("Database not initialized");
-
-    const statements = [
-      // Products table
-      `CREATE TABLE IF NOT EXISTS products (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        category TEXT NOT NULL,
-        imageUrl TEXT,
-        createdAt TEXT NOT NULL
-      );`,
-
-      // Variants table
-      `CREATE TABLE IF NOT EXISTS variants (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        price REAL NOT NULL,
-        productId TEXT NOT NULL,
-        FOREIGN KEY (productId) REFERENCES products (id) ON DELETE CASCADE
-      );`,
-
-      // Variant materials junction table
-      `CREATE TABLE IF NOT EXISTS variant_materials (
-        id TEXT PRIMARY KEY,
-        variantId TEXT NOT NULL,
-        materialId TEXT NOT NULL,
-        quantity REAL NOT NULL,
-        FOREIGN KEY (variantId) REFERENCES variants (id) ON DELETE CASCADE
-      );`,
-
-      // Variant ingredients junction table
-      `CREATE TABLE IF NOT EXISTS variant_ingredients (
-        id TEXT PRIMARY KEY,
-        variantId TEXT NOT NULL,
-        ingredientId TEXT NOT NULL,
-        quantity REAL NOT NULL,
-        FOREIGN KEY (variantId) REFERENCES variants (id) ON DELETE CASCADE
-      );`,
-
-      // Addons table
-      `CREATE TABLE IF NOT EXISTS addons (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        price REAL NOT NULL,
-        createdAt TEXT NOT NULL
-      );`,
-
-      // Ingredients table
-      `CREATE TABLE IF NOT EXISTS ingredients (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        unit TEXT NOT NULL,
-        pricePerPurchase REAL NOT NULL,
-        unitsPerPurchase REAL NOT NULL,
-        pricePerUnit REAL NOT NULL,
-        createdAt TEXT NOT NULL
-      );`,
-
-      // Materials table
-      `CREATE TABLE IF NOT EXISTS materials (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        isPackage INTEGER NOT NULL DEFAULT 0,
-        packagePrice REAL,
-        unitsPerPackage REAL,
-        pricePerPiece REAL NOT NULL,
-        createdAt TEXT NOT NULL
-      );`,
-
-      // Orders table
-      `CREATE TABLE IF NOT EXISTS orders (
-        id TEXT PRIMARY KEY,
-        total REAL NOT NULL,
-        paid REAL NOT NULL,
-        change REAL NOT NULL,
-        orderType TEXT NOT NULL,
-        orderStatus TEXT NOT NULL,
-        items TEXT NOT NULL,
-        createdAt TEXT NOT NULL
-      );`,
-
-      // Stock table
-      `CREATE TABLE IF NOT EXISTS stock (
-        id TEXT PRIMARY KEY,
-        quantity REAL NOT NULL,
-        addonId TEXT,
-        ingredientId TEXT,
-        materialId TEXT,
-        FOREIGN KEY (addonId) REFERENCES addons (id) ON DELETE CASCADE,
-        FOREIGN KEY (ingredientId) REFERENCES ingredients (id) ON DELETE CASCADE,
-        FOREIGN KEY (materialId) REFERENCES materials (id) ON DELETE CASCADE
-      );`,
-    ];
-
-    for (const statement of statements) {
-      await this.db.execute(statement);
+  // Method to manually clean up duplicates
+  async cleanupDuplicates(): Promise<void> {
+    if (Capacitor.isNativePlatform()) {
+      await sqliteService.cleanupDuplicates();
     }
   }
 
@@ -187,12 +65,13 @@ class AndroidDatabaseService implements DatabaseService {
     if (typeof window !== "undefined" && window.localStorage) {
       const tables = [
         "products",
-        "variants",
+        "variants", 
         "addons",
         "ingredients",
         "materials",
         "orders",
         "stock",
+        "flavors", // Added flavors table
       ];
       tables.forEach((table) => {
         if (!localStorage.getItem(`papabear_${table}`)) {
@@ -267,58 +146,62 @@ class AndroidDatabaseService implements DatabaseService {
   async createProduct(product: any): Promise<any> {
     if (!this.isInitialized) await this.initializeDatabase();
 
-    const id = this.generateId();
-    const now = new Date().toISOString();
-
-    if (Capacitor.isNativePlatform() && this.db) {
-      try {
-        await this.db.run(
-          "INSERT INTO products (id, name, category, imageUrl, createdAt) VALUES (?, ?, ?, ?, ?)",
-          [id, product.name, product.category, product.imageUrl || null, now]
-        );
-
-        const newProduct = { id, ...product, createdAt: now };
-
-        if (product.variants) {
-          const variants = [];
-          for (const variant of product.variants) {
-            const variantId = this.generateId();
-            await this.db.run(
-              "INSERT INTO variants (id, name, price, productId) VALUES (?, ?, ?, ?)",
-              [variantId, variant.name, variant.price, id]
+    return DebugLogger.logDatabaseOperation(
+      'CREATE_PRODUCT',
+      { name: product.name, category: product.category, platform: Capacitor.isNativePlatform() ? 'native' : 'web' },
+      async () => {
+        if (Capacitor.isNativePlatform()) {
+          const id = await sqliteService.createProduct(
+            product.name, 
+            product.category, 
+            product.imageUrl
+          );
+          
+          if (id) {
+            const newProduct = {
+              id,
+              name: product.name,
+              category: product.category,
+              imageUrl: product.imageUrl || null,
+              createdAt: new Date().toISOString(),
+              variants: product.variants || []
+            };
+            
+            DebugLogger.log('PRODUCT_CREATED_NEW', { id, name: product.name });
+            return newProduct;
+          } else {
+            // Product already exists, get the existing one
+            const products = await sqliteService.getAllProducts();
+            const existing = products.find(p => 
+              p.name.toLowerCase() === product.name.toLowerCase()
             );
-            variants.push({ id: variantId, ...variant, productId: id });
+            DebugLogger.log('PRODUCT_FOUND_EXISTING', { name: product.name, existing: !!existing });
+            return existing || null;
           }
-          newProduct.variants = variants;
+        } else {
+          // Fallback to localStorage
+          const products = this.getFromWebStorage("papabear_products");
+          const existing = products.find((p: any) => 
+            p.name.toLowerCase() === product.name.toLowerCase()
+          );
+          
+          if (existing) {
+            DebugLogger.log('PRODUCT_FOUND_EXISTING_LOCALSTORAGE', { name: product.name });
+            return existing;
+          }
+
+          const id = this.generateId();
+          const now = new Date().toISOString();
+          const newProduct = { id, ...product, createdAt: now };
+          
+          products.push(newProduct);
+          this.setToWebStorage("papabear_products", products);
+
+          DebugLogger.log('PRODUCT_CREATED_LOCALSTORAGE', { id, name: product.name });
+          return newProduct;
         }
-
-        return newProduct;
-      } catch (error) {
-        console.error("Error creating product:", error);
-        throw error;
       }
-    } else {
-      // Fallback to localStorage
-      const products = this.getFromWebStorage("papabear_products");
-      const variants = this.getFromWebStorage("papabear_variants");
-
-      const newProduct = { id, ...product, createdAt: now };
-      products.push(newProduct);
-      this.setToWebStorage("papabear_products", products);
-
-      if (product.variants) {
-        const newVariants = product.variants.map((v: any) => ({
-          id: this.generateId(),
-          ...v,
-          productId: id,
-        }));
-        variants.push(...newVariants);
-        this.setToWebStorage("papabear_variants", variants);
-        newProduct.variants = newVariants;
-      }
-
-      return newProduct;
-    }
+    );
   }
 
   async updateProduct(id: string, product: any): Promise<any> {
@@ -432,25 +315,32 @@ class AndroidDatabaseService implements DatabaseService {
   async createAddon(addon: any): Promise<any> {
     if (!this.isInitialized) await this.initializeDatabase();
 
-    const id = this.generateId();
-    const now = new Date().toISOString();
-
-    if (Capacitor.isNativePlatform() && this.db) {
+    if (Capacitor.isNativePlatform()) {
       try {
-        await this.db.run(
-          "INSERT INTO addons (id, name, price, createdAt) VALUES (?, ?, ?, ?)",
-          [id, addon.name, addon.price, now]
-        );
-
-        // Create stock entry if provided
-        if (addon.stockQuantity !== undefined) {
-          await this.db.run(
-            "INSERT INTO stock (id, quantity, addonId) VALUES (?, ?, ?)",
-            [this.generateId(), addon.stockQuantity, id]
+        const id = await sqliteService.createAddon(addon.name, addon.price);
+        
+        if (id) {
+          // Update stock if provided
+          if (addon.stockQuantity !== undefined) {
+            await sqliteService.updateStock('addon', id, addon.stockQuantity);
+          }
+          
+          const newAddon = {
+            id,
+            name: addon.name,
+            price: addon.price,
+            createdAt: new Date().toISOString()
+          };
+          
+          return newAddon;
+        } else {
+          // Addon already exists, get the existing one
+          const addons = await sqliteService.getAllAddons();
+          const existing = addons.find(a => 
+            a.name.toLowerCase() === addon.name.toLowerCase()
           );
+          return existing || null;
         }
-
-        return { id, ...addon, createdAt: now };
       } catch (error) {
         console.error("Error creating addon:", error);
         throw error;
@@ -458,6 +348,16 @@ class AndroidDatabaseService implements DatabaseService {
     } else {
       // Fallback to localStorage
       const addons = this.getFromWebStorage("papabear_addons");
+      const existing = addons.find((a: any) => 
+        a.name.toLowerCase() === addon.name.toLowerCase()
+      );
+      
+      if (existing) {
+        return existing;
+      }
+
+      const id = this.generateId();
+      const now = new Date().toISOString();
       const newAddon = { id, ...addon, createdAt: now };
       addons.push(newAddon);
       this.setToWebStorage("papabear_addons", addons);
@@ -572,29 +472,40 @@ class AndroidDatabaseService implements DatabaseService {
       ingredient.pricePerUnit ||
       ingredient.pricePerPurchase / (ingredient.unitsPerPurchase || 1);
 
-    if (Capacitor.isNativePlatform() && this.db) {
+    if (Capacitor.isNativePlatform()) {
       try {
-        await this.db.run(
-          "INSERT INTO ingredients (id, name, unit, pricePerPurchase, unitsPerPurchase, pricePerUnit, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          [
-            id,
-            ingredient.name,
-            ingredient.unit,
-            ingredient.pricePerPurchase,
-            ingredient.unitsPerPurchase,
-            pricePerUnit,
-            now,
-          ]
+        const id = await sqliteService.createIngredient(
+          ingredient.name,
+          ingredient.measurementUnit,
+          ingredient.pricePerPurchase,
+          ingredient.unitsPerPurchase
         );
-
-        if (ingredient.stockQuantity !== undefined) {
-          await this.db.run(
-            "INSERT INTO stock (id, quantity, ingredientId) VALUES (?, ?, ?)",
-            [this.generateId(), ingredient.stockQuantity, id]
+        
+        if (id) {
+          // Update stock if provided
+          if (ingredient.stockQuantity !== undefined) {
+            await sqliteService.updateStock('ingredient', id, ingredient.stockQuantity);
+          }
+          
+          const newIngredient = {
+            id,
+            name: ingredient.name,
+            measurementUnit: ingredient.measurementUnit,
+            pricePerPurchase: ingredient.pricePerPurchase,
+            unitsPerPurchase: ingredient.unitsPerPurchase,
+            pricePerUnit: ingredient.pricePerPurchase / ingredient.unitsPerPurchase,
+            createdAt: new Date().toISOString()
+          };
+          
+          return newIngredient;
+        } else {
+          // Ingredient already exists, get the existing one
+          const ingredients = await sqliteService.getAllIngredients();
+          const existing = ingredients.find(i => 
+            i.name.toLowerCase() === ingredient.name.toLowerCase()
           );
+          return existing || null;
         }
-
-        return { id, ...ingredient, pricePerUnit, createdAt: now };
       } catch (error) {
         console.error("Error creating ingredient:", error);
         throw error;
@@ -702,29 +613,41 @@ class AndroidDatabaseService implements DatabaseService {
         ? material.packagePrice / material.unitsPerPackage
         : material.pricePerPiece || 0;
 
-    if (Capacitor.isNativePlatform() && this.db) {
+    if (Capacitor.isNativePlatform()) {
       try {
-        await this.db.run(
-          "INSERT INTO materials (id, name, isPackage, packagePrice, unitsPerPackage, pricePerPiece, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          [
-            id,
-            material.name,
-            material.isPackage ? 1 : 0,
-            material.packagePrice,
-            material.unitsPerPackage,
-            pricePerPiece,
-            now,
-          ]
+        const id = await sqliteService.createMaterial(
+          material.name,
+          material.pricePerPiece || 0,
+          material.isPackage || false,
+          material.packagePrice,
+          material.unitsPerPackage
         );
-
-        if (material.stockQuantity !== undefined) {
-          await this.db.run(
-            "INSERT INTO stock (id, quantity, materialId) VALUES (?, ?, ?)",
-            [this.generateId(), material.stockQuantity, id]
+        
+        if (id) {
+          // Update stock if provided
+          if (material.stockQuantity !== undefined) {
+            await sqliteService.updateStock('material', id, material.stockQuantity);
+          }
+          
+          const newMaterial = {
+            id,
+            name: material.name,
+            isPackage: material.isPackage || false,
+            packagePrice: material.packagePrice,
+            unitsPerPackage: material.unitsPerPackage,
+            pricePerPiece: material.pricePerPiece || 0,
+            createdAt: new Date().toISOString()
+          };
+          
+          return newMaterial;
+        } else {
+          // Material already exists, get the existing one
+          const materials = await sqliteService.getAllMaterials();
+          const existing = materials.find(m => 
+            m.name.toLowerCase() === material.name.toLowerCase()
           );
+          return existing || null;
         }
-
-        return { id, ...material, pricePerPiece, createdAt: now };
       } catch (error) {
         console.error("Error creating material:", error);
         throw error;
@@ -1063,6 +986,260 @@ class AndroidDatabaseService implements DatabaseService {
       hours: [],
       all_time_daily: [],
     };
+  }
+
+  // FLAVORS - Updated to use improved SQLite service
+  async getFlavors(): Promise<any[]> {
+    if (!this.isInitialized) await this.initializeDatabase();
+
+    if (Capacitor.isNativePlatform()) {
+      return await sqliteService.getAllFlavors();
+    } else {
+      // Fallback to localStorage
+      return this.getFromWebStorage("papabear_flavors");
+    }
+  }
+
+  async createFlavor(flavor: { name: string }): Promise<any> {
+    if (!this.isInitialized) await this.initializeDatabase();
+
+    return DebugLogger.logDatabaseOperation(
+      'CREATE_FLAVOR',
+      { name: flavor.name, platform: Capacitor.isNativePlatform() ? 'native' : 'web' },
+      async () => {
+        if (Capacitor.isNativePlatform()) {
+          const id = await sqliteService.createFlavor(flavor.name);
+          if (id) {
+            const newFlavor = { id, name: flavor.name, createdAt: new Date().toISOString() };
+            DebugLogger.log('FLAVOR_CREATED_NEW', { id, name: flavor.name });
+            return newFlavor;
+          } else {
+            // Flavor already exists, get the existing one
+            const existingFlavors = await sqliteService.getAllFlavors();
+            const existing = existingFlavors.find(f => f.name.toLowerCase() === flavor.name.toLowerCase());
+            DebugLogger.log('FLAVOR_FOUND_EXISTING', { name: flavor.name, existing: !!existing });
+            return existing;
+          }
+        } else {
+          // Fallback to localStorage
+          const flavors = this.getFromWebStorage("papabear_flavors");
+          const existing = flavors.find((f: any) => f.name.toLowerCase() === flavor.name.toLowerCase());
+          
+          if (existing) {
+            DebugLogger.log('FLAVOR_FOUND_EXISTING_LOCALSTORAGE', { name: flavor.name });
+            return existing;
+          }
+
+          const id = this.generateId();
+          const now = new Date().toISOString();
+          const newFlavor = { id, name: flavor.name, createdAt: now };
+          
+          flavors.push(newFlavor);
+          this.setToWebStorage("papabear_flavors", flavors);
+          
+          DebugLogger.log('FLAVOR_CREATED_LOCALSTORAGE', { id, name: flavor.name });
+          return newFlavor;
+        }
+      }
+    );
+  }
+
+  // Cash flow data storage
+  private cashFlowTransactions: any[] = [];
+  private cashDrawerBalance: number = 5000;
+
+  // Cash Flow Methods
+  async getCashFlowTransactions(filters?: any): Promise<any[]> {
+    if (!this.isInitialized) await this.initializeDatabase();
+    
+    console.log('🔍 AndroidDatabaseService: Getting cash flow transactions:', filters);
+    DebugLogger.log('GET_CASH_FLOW_TRANSACTIONS', { filters });
+
+    try {
+      // Initialize with default transaction if empty
+      if (this.cashFlowTransactions.length === 0) {
+        this.cashFlowTransactions = [
+          {
+            id: '1',
+            type: 'INFLOW' as const,
+            amount: 500,
+            category: 'CASH_DEPOSIT',
+            description: 'Opening cash drawer',
+            createdAt: new Date().toISOString(),
+            createdBy: 'admin'
+          }
+        ];
+      }
+
+      DebugLogger.log('GET_CASH_FLOW_TRANSACTIONS', { filters }, this.cashFlowTransactions);
+      return [...this.cashFlowTransactions].reverse(); // Most recent first
+    } catch (error) {
+      console.error('❌ AndroidDatabaseService: Error getting cash flow transactions:', error);
+      DebugLogger.log('GET_CASH_FLOW_TRANSACTIONS', { filters }, null, error);
+      throw error;
+    }
+  }
+
+  async getCashFlowSummary(period?: 'today' | 'week' | 'month'): Promise<any> {
+    if (!this.isInitialized) await this.initializeDatabase();
+    
+    console.log('🔍 AndroidDatabaseService: Getting cash flow summary for period:', period);
+    DebugLogger.log('GET_CASH_FLOW_SUMMARY', { period });
+
+    try {
+      // Calculate real summary from transactions
+      const transactions = await this.getCashFlowTransactions();
+      const totalInflow = transactions
+        .filter(t => t.type === 'INFLOW')
+        .reduce((sum, t) => sum + t.amount, 0);
+      const totalOutflow = transactions
+        .filter(t => t.type === 'OUTFLOW')
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const summary = {
+        period: period || 'today',
+        totalInflow,
+        totalOutflow,
+        netFlow: totalInflow - totalOutflow,
+        currentBalance: this.cashDrawerBalance,
+        transactionCount: transactions.length,
+        inflowByCategory: {
+          'ORDER_PAYMENT': transactions.filter(t => t.type === 'INFLOW' && t.category === 'ORDER_PAYMENT').reduce((sum, t) => sum + t.amount, 0),
+          'CASH_DEPOSIT': transactions.filter(t => t.type === 'INFLOW' && t.category === 'CASH_DEPOSIT').reduce((sum, t) => sum + t.amount, 0)
+        },
+        outflowByCategory: {
+          'EXPENSE': transactions.filter(t => t.type === 'OUTFLOW' && t.category === 'EXPENSE').reduce((sum, t) => sum + t.amount, 0),
+          'STOCK_PURCHASE': transactions.filter(t => t.type === 'OUTFLOW' && t.category === 'STOCK_PURCHASE').reduce((sum, t) => sum + t.amount, 0)
+        },
+        recentTransactions: transactions.slice(0, 5)
+      };
+
+      DebugLogger.log('GET_CASH_FLOW_SUMMARY', { period }, summary);
+      return summary;
+    } catch (error) {
+      console.error('❌ AndroidDatabaseService: Error getting cash flow summary:', error);
+      DebugLogger.log('GET_CASH_FLOW_SUMMARY', { period }, null, error);
+      throw error;
+    }
+  }
+
+  async getCashDrawerBalance(): Promise<any> {
+    if (!this.isInitialized) await this.initializeDatabase();
+    
+    console.log('🔍 AndroidDatabaseService: Getting cash drawer balance');
+    DebugLogger.log('GET_CASH_DRAWER_BALANCE', {});
+
+    try {
+      const balance = {
+        currentBalance: this.cashDrawerBalance,
+        lastUpdated: new Date().toISOString()
+      };
+
+      DebugLogger.log('GET_CASH_DRAWER_BALANCE', {}, balance);
+      return balance;
+    } catch (error) {
+      console.error('❌ AndroidDatabaseService: Error getting cash drawer balance:', error);
+      DebugLogger.log('GET_CASH_DRAWER_BALANCE', {}, null, error);
+      throw error;
+    }
+  }
+
+  async addCashDeposit(amount: number, description: string): Promise<any> {
+    if (!this.isInitialized) await this.initializeDatabase();
+    
+    console.log('🔍 AndroidDatabaseService: Adding cash deposit:', { amount, description });
+    DebugLogger.log('ADD_CASH_DEPOSIT', { amount, description });
+
+    try {
+      const transaction = {
+        id: Date.now().toString(),
+        type: 'INFLOW' as const,
+        amount,
+        category: 'CASH_DEPOSIT',
+        description,
+        createdAt: new Date().toISOString(),
+        createdBy: 'admin'
+      };
+
+      // Add to transactions list and update balance
+      this.cashFlowTransactions.push(transaction);
+      this.cashDrawerBalance += amount;
+
+      DebugLogger.log('ADD_CASH_DEPOSIT', { amount, description }, transaction);
+      return transaction;
+    } catch (error) {
+      console.error('❌ AndroidDatabaseService: Error adding cash deposit:', error);
+      DebugLogger.log('ADD_CASH_DEPOSIT', { amount, description }, null, error);
+      throw error;
+    }
+  }
+
+  async recordExpense(amount: number, description: string, itemsPurchased?: string): Promise<any> {
+    if (!this.isInitialized) await this.initializeDatabase();
+    
+    console.log('🔍 AndroidDatabaseService: Recording expense:', { amount, description, itemsPurchased });
+    DebugLogger.log('RECORD_EXPENSE', { amount, description, itemsPurchased });
+
+    try {
+      const transaction = {
+        id: Date.now().toString(),
+        type: 'OUTFLOW' as const,
+        amount,
+        category: 'EXPENSE',
+        description,
+        itemsPurchased,
+        createdAt: new Date().toISOString(),
+        createdBy: 'admin'
+      };
+
+      // Add to transactions list and update balance
+      this.cashFlowTransactions.push(transaction);
+      this.cashDrawerBalance -= amount;
+
+      DebugLogger.log('RECORD_EXPENSE', { amount, description, itemsPurchased }, transaction);
+      return transaction;
+    } catch (error) {
+      console.error('❌ AndroidDatabaseService: Error recording expense:', error);
+      DebugLogger.log('RECORD_EXPENSE', { amount, description, itemsPurchased }, null, error);
+      throw error;
+    }
+  }
+
+  async setCashDrawerBalance(newBalance: number, reason: string): Promise<any> {
+    if (!this.isInitialized) await this.initializeDatabase();
+    
+    console.log('🔍 AndroidDatabaseService: Setting cash drawer balance:', { newBalance, reason });
+    DebugLogger.log('SET_CASH_DRAWER_BALANCE', { newBalance, reason });
+
+    try {
+      const currentBalance = this.cashDrawerBalance;
+      const difference = newBalance - currentBalance;
+      
+      if (difference !== 0) {
+        const adjustment = {
+          id: Date.now().toString(),
+          type: difference > 0 ? 'INFLOW' as const : 'OUTFLOW' as const,
+          amount: Math.abs(difference),
+          category: 'CASH_ADJUSTMENT',
+          description: `Balance adjustment: ${reason}`,
+          createdAt: new Date().toISOString(),
+          createdBy: 'admin'
+        };
+
+        // Add adjustment transaction and update balance
+        this.cashFlowTransactions.push(adjustment);
+        this.cashDrawerBalance = newBalance;
+
+        DebugLogger.log('SET_CASH_DRAWER_BALANCE', { newBalance, reason }, adjustment);
+        return adjustment;
+      }
+
+      return null; // No change needed
+    } catch (error) {
+      console.error('❌ AndroidDatabaseService: Error setting cash drawer balance:', error);
+      DebugLogger.log('SET_CASH_DRAWER_BALANCE', { newBalance, reason }, null, error);
+      throw error;
+    }
   }
 }
 

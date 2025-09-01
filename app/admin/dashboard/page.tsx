@@ -140,7 +140,7 @@ export default function AdminDashboardPage() {
   const statsData = [
     {
       title: "Total Revenue",
-      value: `₱${stats.totalRevenue?.toLocaleString() || "0"}`,
+      value: `₱${(stats.totalRevenue || 0).toLocaleString()}`,
       icon: <DollarSign className="w-6 h-6 text-emerald-600" />,
       trend: {
         value: stats.trend_percent || 0,
@@ -150,19 +150,19 @@ export default function AdminDashboardPage() {
     },
     {
       title: "Total Orders",
-      value: stats.totalOrders?.toLocaleString() || "0",
+      value: (stats.totalOrders || 0).toLocaleString(),
       icon: <ShoppingBag className="w-6 h-6 text-blue-600" />,
       description: `${stats.todayOrders || 0} orders today`,
     },
     {
       title: "Cash Drawer",
-      value: `₱${stats.cashDrawerBalance?.toLocaleString() || "0"}`,
+      value: `₱${(stats.cashDrawerBalance || 0).toLocaleString()}`,
       icon: <Wallet className="w-6 h-6 text-green-600" />,
       description: "Current balance",
     },
     {
       title: "Today's Sales",
-      value: `₱${stats.todayInflow?.toLocaleString() || "0"}`,
+      value: `₱${(stats.todayInflow || 0).toLocaleString()}`,
       icon: <TrendingUp className="w-6 h-6 text-purple-600" />,
       description: "Revenue today",
     },
@@ -337,12 +337,13 @@ export default function AdminDashboardPage() {
             <SalesMetricsGrid
               metrics={{
                 avgOrderValue:
-                  analyticsData.stats.totalRevenue /
-                    analyticsData.stats.totalOrders || 0,
-                totalCustomers: analyticsData.stats.totalOrders,
+                  (analyticsData.stats.totalRevenue && analyticsData.stats.totalOrders)
+                    ? analyticsData.stats.totalRevenue / analyticsData.stats.totalOrders
+                    : 0,
+                totalCustomers: analyticsData.stats.totalOrders || 0,
                 conversionRate: 85.2,
-                peakHour: analyticsData.stats.busiest_hour,
-                topProduct: analyticsData.stats.best_product,
+                peakHour: analyticsData.stats.busiest_hour || "N/A",
+                topProduct: analyticsData.stats.best_product || "N/A",
                 profitMargin: 65,
               }}
             />

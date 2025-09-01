@@ -4,7 +4,6 @@ const config: CapacitorConfig = {
   appId: 'com.papabear.pos',
   appName: 'Papa Bear POS',
   webDir: 'out',
-  bundledWebRuntime: false,
   plugins: {
     CapacitorSQLite: {
       iosDatabaseLocation: 'Library/CapacitorDatabase',

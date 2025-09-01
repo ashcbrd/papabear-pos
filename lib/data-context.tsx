@@ -8,8 +8,8 @@ import { dataMigration } from './data-migration';
 import { initializeSampleData } from './seed-data';
 import LoadingScreen from '@/components/loading-screen';
 
-// Use SQLite for better performance and data integrity
-const currentDataService = sqliteDataService;
+// Use Android database service for better performance and data integrity
+const currentDataService = androidDatabaseService;
 
 interface DataContextType {
   isInitialized: boolean;
