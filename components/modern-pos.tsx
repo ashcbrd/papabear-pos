@@ -1,28 +1,29 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { JSX, useCallback, useEffect, useState, useRef } from "react";
+import { JSX, useCallback, useEffect, useRef, useState } from "react";
 import {
   Plus,
   Minus,
   Trash,
-  Check,
-  X,
   Search,
   ShoppingCart,
   Wallet,
   Package,
   Edit,
+  X,
+  LayoutGrid,
+  Utensils,
+  Coffee,
+  Zap,
 } from "lucide-react";
 import OrderConfirmationDialog from "@/components/order-confirmation-dialog";
-import CustomSelect from "@/components/custom-select";
+import CustomSelect from "@/components/custom-select"; // keep if you use elsewhere
 import { useToast } from "@/components/toast-context";
 import { useData } from "@/lib/data-context";
 import { formatDate } from "@/lib/date-utils";
-import { LayoutGrid, Utensils, Coffee, Zap, ChevronLeft } from "lucide-react";
 import LongPressServeButton from "@/components/long-press-serve-button";
 
-// Type definitions (same as original)
 type Category = "Meals" | "ColdBeverages" | "HotBeverages";
 type OrderType = "DINE_IN" | "TAKE_OUT";
 
@@ -56,6 +57,13 @@ interface Order {
   orderStatus: string;
   createdAt?: string;
   total?: number;
+  items?: {
+    product: ProductType;
+    flavor: Flavor;
+    size: Size;
+    quantity: number;
+    addons: { addon: Addon; quantity: number }[];
+  }[];
 }
 
 type ProductWithFlavorsAndSizes = ProductType & {
@@ -74,16 +82,6 @@ type OrderItem = {
   size: Size;
   quantity: number;
   addons: OrderAddon[];
-};
-
-type QueuedOrder = Order & {
-  items: {
-    product: ProductType;
-    flavor: Flavor;
-    size: Size;
-    quantity: number;
-    addons: { addon: Addon; quantity: number }[];
-  }[];
 };
 
 export default function ModernPOSPage() {
@@ -117,11 +115,12 @@ export default function ModernPOSPage() {
   const [cashDrawerBalance, setCashDrawerBalance] = useState(0);
 
   const sizeSelectionRef = useRef<HTMLDivElement>(null);
-
   const { showToast } = useToast();
 
-  // Filter orders to show only queuing orders (not served)
-  const orders = allOrders.filter((order) => order.orderStatus !== "SERVED");
+  // Show only orders not served
+  const orders: Order[] = allOrders.filter(
+    (o: Order) => o.orderStatus !== "SERVED"
+  );
 
   const categories: (Category | "All")[] = [
     "All",
@@ -159,24 +158,19 @@ export default function ModernPOSPage() {
     setSelectedSize(null);
     setSelectedAddons([]);
 
-    // If product has no flavors or only one flavor, auto-select it
-    if (product.flavors && product.flavors.length === 1) {
-      setTimeout(() => {
-        setSelectedFlavor(product.flavors[0]);
-      }, 50);
-    } else if (!product.flavors || product.flavors.length === 0) {
-      // For products with no flavors, create a default flavor
-      setTimeout(() => {
-        setSelectedFlavor({ id: "default", name: "Default" });
-      }, 50);
+    // auto-select flavor if none available, but let user choose if flavors exist
+    if (!product.flavors || product.flavors.length === 0) {
+      setTimeout(
+        () => setSelectedFlavor({ id: "default", name: "Default" }),
+        50
+      );
     }
+    // For products with flavors (single or multiple), always show flavor selection
   };
 
   const handleFlavorSelect = (flavor: Flavor) => {
     setSelectedFlavor(flavor);
     setSelectedSize(null);
-
-    // Automatically scroll to size selection section
     setTimeout(() => {
       if (sizeSelectionRef.current) {
         sizeSelectionRef.current.scrollIntoView({
@@ -184,12 +178,10 @@ export default function ModernPOSPage() {
           block: "start",
         });
       }
-    }, 100); // Small delay to ensure the size section is rendered
+    }, 100);
   };
 
-  const handleSizeSelect = (size: Size) => {
-    setSelectedSize(size);
-  };
+  const handleSizeSelect = (size: Size) => setSelectedSize(size);
 
   const handleAddonChange = (addon: Addon, change: number) => {
     setSelectedAddons((prev) => {
@@ -264,72 +256,29 @@ export default function ModernPOSPage() {
 
   const editItem = (index: number) => {
     const item = orderItems[index];
-    if (item) {
-      // Remove the item from cart and put it back into the modal for editing
-      const items = [...orderItems];
-      items.splice(index, 1);
-      setOrderItems(items);
-      setSelectedProduct(item.product);
-      setSelectedFlavor(item.flavor);
-      setSelectedSize(item.size);
-      setSelectedAddons(item.addons);
-    }
-  };
-
-  const updateFlavor = (index: number, flavorId: string) => {
+    if (!item) return;
     const items = [...orderItems];
-    const flavor = items[index].product.flavors.find((f) => f.id === flavorId);
-    if (flavor) {
-      items[index].flavor = flavor;
-      setOrderItems(items);
-    }
-  };
-
-  const updateSize = (index: number, sizeId: string) => {
-    const items = [...orderItems];
-    const size = items[index].product.sizes.find((s) => s.id === sizeId);
-    if (size) {
-      items[index].size = size;
-      setOrderItems(items);
-    }
-  };
-
-  const updateAddon = (
-    itemIndex: number,
-    addonId: string,
-    quantity: number
-  ) => {
-    const items = [...orderItems];
-    const addon = addons.find((a) => a.id === addonId);
-    if (!addon) return;
-
-    const existing = items[itemIndex].addons.find(
-      (a) => a.addon.id === addonId
-    );
-    if (existing) {
-      existing.quantity = quantity;
-    } else {
-      items[itemIndex].addons.push({ addon, quantity });
-    }
-
-    items[itemIndex].addons = items[itemIndex].addons.filter(
-      (a) => a.quantity > 0
-    );
+    items.splice(index, 1);
     setOrderItems(items);
+    setSelectedProduct(item.product);
+    setSelectedFlavor(item.flavor);
+    setSelectedSize(item.size);
+    setSelectedAddons(item.addons);
   };
 
   const calculateTotal = () => {
     return orderItems.reduce((total, item) => {
-      const productTotal = item.size.price * item.quantity;
+      const base = item.size.price * item.quantity;
       const addonTotal = item.addons.reduce(
         (sum, a) => sum + a.addon.price * a.quantity,
         0
       );
-      return total + productTotal + addonTotal;
+      return total + base + addonTotal;
     }, 0);
   };
 
-  const isPaymentSufficient = parseFloat(payment || "0") >= calculateTotal();
+  const isPaymentSufficient =
+    parseFloat(payment || "0") >= (calculateTotal() || 0);
 
   const handleDigit = (digit: string) => {
     setPayment((prev) => {
@@ -338,13 +287,11 @@ export default function ModernPOSPage() {
       if (/^0+$/.test(prev) && digit !== "." && digit !== "0") return digit;
 
       const [intPart, decPart] = prev.split(".");
-
       if (!prev.includes(".")) {
-        if (intPart.length >= 4 && digit !== ".") return prev;
+        if (intPart.length >= 6 && digit !== ".") return prev;
       } else {
         if (digit !== "." && decPart?.length >= 2) return prev;
       }
-
       return prev + digit;
     });
   };
@@ -367,60 +314,70 @@ export default function ModernPOSPage() {
   }, [orderItems]);
 
   const handleConfirmOrder = async () => {
-    try {
-      const orderData = {
-        items: orderItems.map((item) => ({
-          product: item.product,
-          flavor: item.flavor,
-          size: item.size,
-          quantity: item.quantity,
-          status: "QUEUING",
-          addons: item.addons.map((a) => ({
-            addon: a.addon,
-            quantity: a.quantity,
-          })),
+    const total = calculateOrderTotal();
+    const paid = parseFloat(payment || "0");
+    const change = Math.max(0, paid - total);
+
+    const orderData = {
+      items: orderItems.map((item) => ({
+        product: item.product,
+        flavor: item.flavor,
+        size: item.size,
+        quantity: item.quantity,
+        status: "QUEUING",
+        addons: item.addons.map((a) => ({
+          addon: a.addon,
+          quantity: a.quantity,
         })),
-        total: calculateOrderTotal(),
-        paid: parseFloat(payment || "0"),
-        change: parseFloat(payment || "0") - calculateOrderTotal(),
-        orderType,
-        orderStatus: "QUEUING", // Add overall order status
-      };
+      })),
+      total,
+      paid,
+      change,
+      orderType,
+      orderStatus: "QUEUING",
+    };
 
+    try {
       let createdOrderId = editingOrderId;
-
       if (editingOrderId) {
         await updateOrder(editingOrderId, orderData);
-        showToast("Order updated.", "success");
       } else {
         const newOrder = await createOrder(orderData);
         createdOrderId = newOrder.id;
-        showToast("Order placed.", "success");
-
-        // Record cash inflow for new orders only (to avoid duplicates on updates)
-        if (orderData.paid > 0) {
-          await recordCashInflow({
-            amount: orderData.paid,
-            type: "SALE",
-            description: `Order #${createdOrderId.slice(-6)} - ${orderType}`,
-            paymentMethod: "CASH",
-            orderId: createdOrderId,
-          });
-        }
       }
 
+      // Best effort: record cash flow, don't flip main toast if this fails
+      try {
+        if (paid > 0) {
+          await recordCashInflow({
+            amount: paid,
+            type: "SALE",
+            description: `Order #${(createdOrderId || "").slice(
+              -6
+            )} - ${orderType}`,
+            paymentMethod: "CASH",
+            orderId: createdOrderId || undefined,
+          });
+        }
+      } catch (err) {
+        console.error("Cash-flow record failed:", err);
+        // Optional: showToast("Order saved, but cash flow log failed.", "warning");
+      }
+
+      showToast(editingOrderId ? "Order updated." : "Order placed.", "success");
+
+      // cleanup UI
       setOrderItems([]);
       setPayment("");
       setShowDialog(false);
       setEditingOrderId(null);
       setIsOrderPanelVisible(false);
 
+      // refresh data
       await loadOrders();
-      await loadCashDrawerBalance(); // Refresh cash drawer balance after payment
+      await loadCashDrawerBalance();
 
-      setTimeout(() => {
-        setOrderType("");
-      }, 2000);
+      setTimeout(() => setOrderType(""), 2000);
     } catch (error) {
       showToast("Failed to process order.", "error");
       console.error("Order error:", error);
@@ -428,13 +385,9 @@ export default function ModernPOSPage() {
   };
 
   const handleServe = async (id: string) => {
-    console.log("handleServe called with order ID:", id);
     try {
-      console.log("Updating order status to SERVED...");
       await updateOrder(id, { orderStatus: "SERVED" });
-      console.log("Order updated, reloading orders...");
       await loadOrders();
-      console.log("Orders reloaded successfully");
       showToast("Order served successfully.", "success");
     } catch (error) {
       showToast("Failed to serve order.", "error");
@@ -459,10 +412,11 @@ export default function ModernPOSPage() {
     }
   };
 
+  // Landing screen (choose order type)
   if (!orderType) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100">
-        {/* Modern Header */}
+        {/* Header */}
         <header className="bg-white/80 backdrop-blur-lg border-b border-neutral-200">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
@@ -504,7 +458,7 @@ export default function ModernPOSPage() {
         </header>
 
         <div className="max-w-7xl mx-auto px-6 py-8">
-          {/* Welcome Section */}
+          {/* Welcome */}
           <div className="text-center space-y-8">
             <div className="space-y-4">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center mx-auto shadow-xl">
@@ -522,9 +476,8 @@ export default function ModernPOSPage() {
               </div>
             </div>
 
-            {/* Order Type Selection */}
+            {/* Order type */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 max-w-2xl mx-auto">
-              {/* Dine In Button */}
               <button
                 onClick={() => setOrderType("DINE_IN")}
                 className="group relative overflow-hidden bg-white rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:scale-105 border-2 border-transparent hover:border-green-200"
@@ -546,7 +499,6 @@ export default function ModernPOSPage() {
                 </div>
               </button>
 
-              {/* Take Out Button */}
               <button
                 onClick={() => setOrderType("TAKE_OUT")}
                 className="group relative overflow-hidden bg-white rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:scale-105 border-2 border-transparent hover:border-green-200"
@@ -571,7 +523,7 @@ export default function ModernPOSPage() {
           </div>
         </div>
 
-        {/* Queue Orders Overlay */}
+        {/* Queue overlay */}
         <div
           className={`fixed inset-0 z-50 transform transition-transform duration-300 ${
             isQueueVisible ? "translate-x-0" : "translate-x-full"
@@ -580,16 +532,16 @@ export default function ModernPOSPage() {
           <div
             className="bg-black/50 backdrop-blur-sm absolute inset-0 z-0"
             onClick={() => setIsQueueVisible(false)}
-          ></div>
+          />
           <div className="bg-white h-full w-full max-w-6xl ml-auto flex flex-col relative shadow-2xl">
-            {/* Queue Header */}
             <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-3">
                   📝 Queue Orders
                 </h2>
                 <p className="text-sm text-neutral-600 mt-1">
-                  {orders.length} order{orders.length !== 1 ? "s" : ""} waiting to be served
+                  {orders.length} order{orders.length !== 1 ? "s" : ""} waiting
+                  to be served
                 </p>
               </div>
               <div className="flex items-center space-x-4">
@@ -608,7 +560,6 @@ export default function ModernPOSPage() {
               </div>
             </div>
 
-            {/* Queue Content */}
             <div className="flex-1 overflow-y-auto p-6">
               {orders.length > 0 ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -617,7 +568,6 @@ export default function ModernPOSPage() {
                       key={order.id}
                       className="card card-hover bg-white border-2 border-transparent hover:border-green-200 transition-all duration-300"
                     >
-                      {/* Order Header */}
                       <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-green-50 to-emerald-50">
                         <div className="flex items-center justify-between">
                           <div>
@@ -641,7 +591,6 @@ export default function ModernPOSPage() {
                         </div>
                       </div>
 
-                      {/* Order Items */}
                       <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
                         {order.items?.map((item, index) => (
                           <div
@@ -685,7 +634,6 @@ export default function ModernPOSPage() {
                         )) || []}
                       </div>
 
-                      {/* Order Actions */}
                       <div className="p-4 border-t border-neutral-200 bg-neutral-50">
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-medium text-neutral-600">
@@ -727,9 +675,10 @@ export default function ModernPOSPage() {
     );
   }
 
+  // Main POS screen
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100">
-      {/* Modern Header */}
+      {/* Header */}
       <header className="bg-white/80 backdrop-blur-lg border-b border-neutral-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
@@ -782,12 +731,12 @@ export default function ModernPOSPage() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content Area */}
+          {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Controls Section */}
+            {/* Controls */}
             <div className="card p-6 flex flex-col">
               <div className="flex flex-col gap-4 items-start lg:items-center justify-between">
-                {/* Category Filters */}
+                {/* Categories */}
                 <div className="flex flex-wrap gap-2">
                   {categories.map((cat) => (
                     <button
@@ -814,7 +763,7 @@ export default function ModernPOSPage() {
                 </div>
 
                 {/* Search */}
-                <div className="w-full  relative">
+                <div className="w-full relative">
                   <Search
                     size={18}
                     className="absolute left-3 top-3 text-neutral-400"
@@ -867,18 +816,22 @@ export default function ModernPOSPage() {
                           <span className="badge badge-neutral text-xs">
                             {product.sizes?.length || 0} sizes
                           </span>
-                          <span className="text-xs text-neutral-500">
+                          <span className={`text-xs ${
+                            product.flavors?.length > 0 
+                              ? "text-green-600 font-medium" 
+                              : "text-neutral-500"
+                          }`}>
                             {product.flavors?.length || 0} flavors
                           </span>
                         </div>
                       </div>
                     </button>
 
-                    {/* Enhanced Product Selection Modal */}
+                    {/* Product Modal */}
                     {selectedProduct?.id === product.id && (
                       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden">
-                          {/* Modal Header */}
+                          {/* Header */}
                           <div className="p-6 border-b border-neutral-200">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-4">
@@ -914,42 +867,54 @@ export default function ModernPOSPage() {
                             </div>
                           </div>
 
-                          {/* Modal Content */}
+                          {/* Content */}
                           <div className="p-6 space-y-6 max-h-96 overflow-y-auto">
-                            {/* Flavor Selection - Only show if product has multiple flavors */}
-                            {product.flavors && product.flavors.length > 1 && (
+                            {/* Flavor Selection - Always show if flavors exist */}
+                            {product.flavors && product.flavors.length > 0 && (
                               <div>
                                 <label className="block text-sm font-semibold text-neutral-900 mb-3">
                                   Choose Flavor
+                                  {product.flavors.length === 1 && (
+                                    <span className="text-xs text-neutral-500 ml-2">
+                                      (1 option available)
+                                    </span>
+                                  )}
                                 </label>
-                                {product.flavors &&
-                                product.flavors.length > 0 ? (
-                                  <div className="grid grid-cols-2 gap-2">
-                                    {product.flavors.map((flavor) => (
-                                      <button
-                                        key={flavor.id}
-                                        onClick={() =>
-                                          handleFlavorSelect(flavor)
-                                        }
-                                        className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                                          selectedFlavor?.id === flavor.id
-                                            ? "border-green-500 bg-green-50 text-green-700"
-                                            : "border-neutral-200 hover:border-neutral-300 text-neutral-700"
-                                        }`}
-                                      >
-                                        {flavor.name}
-                                      </button>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">
-                                    No flavors available for this product
-                                  </div>
-                                )}
+                                <div className="grid grid-cols-2 gap-2">
+                                  {product.flavors.map((flavor) => (
+                                    <button
+                                      key={flavor.id}
+                                      onClick={() =>
+                                        handleFlavorSelect(flavor)
+                                      }
+                                      className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                                        selectedFlavor?.id === flavor.id
+                                          ? "border-green-500 bg-green-50 text-green-700"
+                                          : "border-neutral-200 hover:border-neutral-300 text-neutral-700"
+                                      }`}
+                                    >
+                                      {flavor.name}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             )}
 
-                            {/* Size Selection */}
+                            {/* Show message if no flavors available */}
+                            {(!product.flavors || product.flavors.length === 0) && selectedFlavor && (
+                              <div>
+                                <label className="block text-sm font-semibold text-neutral-900 mb-3">
+                                  Flavor
+                                </label>
+                                <div className="p-3 rounded-lg bg-neutral-100 border-2 border-neutral-300">
+                                  <span className="text-sm text-neutral-600">
+                                    Default (no flavor options available)
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Size */}
                             {selectedFlavor && (
                               <div ref={sizeSelectionRef}>
                                 <label className="block text-sm font-semibold text-neutral-900 mb-3">
@@ -988,7 +953,7 @@ export default function ModernPOSPage() {
                               </div>
                             )}
 
-                            {/* Addons Selection - Optional */}
+                            {/* Addons */}
                             {selectedSize && (
                               <div>
                                 <label className="block text-sm font-semibold text-neutral-900 mb-3">
@@ -1051,7 +1016,7 @@ export default function ModernPOSPage() {
                             )}
                           </div>
 
-                          {/* Modal Footer */}
+                          {/* Footer */}
                           {selectedSize && (
                             <div className="p-6 border-t border-neutral-200 bg-neutral-50">
                               <button
@@ -1085,10 +1050,9 @@ export default function ModernPOSPage() {
             </div>
           </div>
 
-          {/* Desktop Cart Sidebar */}
+          {/* Desktop Cart */}
           <div className="hidden lg:block lg:col-span-1">
             <div className="card sticky top-24 rounded-b-xl">
-              {/* Cart Header */}
               <div className="p-6 border-b border-neutral-200">
                 <h2 className="text-lg font-bold text-neutral-900">
                   Current Order
@@ -1100,7 +1064,6 @@ export default function ModernPOSPage() {
                 )}
               </div>
 
-              {/* Cart Items */}
               <div className="flex-1 max-h-96 overflow-y-auto">
                 {orderItems.length > 0 ? (
                   <div className="p-6 space-y-4">
@@ -1172,7 +1135,6 @@ export default function ModernPOSPage() {
                           </div>
                         </div>
 
-                        {/* Quantity Controls */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center bg-white rounded-lg border border-neutral-300">
                             <button
@@ -1229,7 +1191,6 @@ export default function ModernPOSPage() {
                 )}
               </div>
 
-              {/* Cart Total */}
               {orderItems.length > 0 && (
                 <div className="border-t border-neutral-200 bg-neutral-50 p-6 rounded-b-xl">
                   <div className="flex items-center justify-between mb-4">
@@ -1263,9 +1224,8 @@ export default function ModernPOSPage() {
         <div
           className="bg-black/50 backdrop-blur-sm absolute inset-0 z-0"
           onClick={() => setIsOrderPanelVisible(false)}
-        ></div>
+        />
         <div className="bg-white h-full w-full max-w-md ml-auto flex flex-col relative">
-          {/* Mobile Cart Header */}
           <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
             <h2 className="text-lg font-bold text-neutral-900">
               Current Order
@@ -1278,7 +1238,6 @@ export default function ModernPOSPage() {
             </button>
           </div>
 
-          {/* Mobile Cart Content - Same as desktop but simplified */}
           <div className="flex-1 overflow-hidden flex flex-col">
             <div className="flex-1 overflow-y-auto">
               {orderItems.length > 0 ? (
@@ -1370,7 +1329,6 @@ export default function ModernPOSPage() {
               )}
             </div>
 
-            {/* Mobile Cart Footer */}
             {orderItems.length > 0 && (
               <div className="border-t border-neutral-200 bg-white p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -1401,7 +1359,6 @@ export default function ModernPOSPage() {
       {showDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white relative h-full rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
-            {/* Payment Header */}
             <div className="p-6 border-b border-neutral-200 ">
               <h2 className="text-xl font-bold text-neutral-900">
                 Complete Payment
@@ -1411,9 +1368,7 @@ export default function ModernPOSPage() {
               </p>
             </div>
 
-            {/* Payment Content */}
-            <div className="p-6  overflow-y-auto">
-              {/* Payment Summary */}
+            <div className="p-6 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-neutral-50 rounded-lg p-4">
                   <div className="text-sm font-medium text-neutral-600">
@@ -1445,7 +1400,6 @@ export default function ModernPOSPage() {
                 </div>
               </div>
 
-              {/* Modern Number Pad */}
               <div className="space-y-4">
                 <div className="flex gap-3 mb-4">
                   <button
@@ -1497,7 +1451,6 @@ export default function ModernPOSPage() {
               </div>
             </div>
 
-            {/* Payment Actions */}
             <div className="border-t absolute bottom-0 w-full border-neutral-200 bg-neutral-50 p-6 flex gap-3">
               <button
                 onClick={() => setShowDialog(false)}
@@ -1520,16 +1473,16 @@ export default function ModernPOSPage() {
         </div>
       )}
 
-      {/* Order Confirmation Dialog - Keep original for compatibility */}
+      {/* Legacy dialog kept closed for compatibility */}
       <OrderConfirmationDialog
-        isOpen={false} // We're using our custom payment modal instead
+        isOpen={false}
         onClose={() => setShowDialog(false)}
         title="Review Order"
       >
         <div>Order details would go here</div>
       </OrderConfirmationDialog>
 
-      {/* Queue Orders Overlay */}
+      {/* Queue overlay while in POS */}
       <div
         className={`fixed inset-0 z-50 transform transition-transform duration-300 ${
           isQueueVisible ? "translate-x-0" : "translate-x-full"
@@ -1538,16 +1491,16 @@ export default function ModernPOSPage() {
         <div
           className="bg-black/50 backdrop-blur-sm absolute inset-0 z-0"
           onClick={() => setIsQueueVisible(false)}
-        ></div>
+        />
         <div className="bg-white h-full w-full max-w-6xl ml-auto flex flex-col relative shadow-2xl">
-          {/* Queue Header */}
           <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-3">
                 📝 Queue Orders
               </h2>
               <p className="text-sm text-neutral-600 mt-1">
-                {orders.length} order{orders.length !== 1 ? "s" : ""} waiting to be served
+                {orders.length} order{orders.length !== 1 ? "s" : ""} waiting to
+                be served
               </p>
             </div>
             <div className="flex items-center space-x-4">
@@ -1566,7 +1519,6 @@ export default function ModernPOSPage() {
             </div>
           </div>
 
-          {/* Queue Content */}
           <div className="flex-1 overflow-y-auto p-6">
             {orders.length > 0 ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -1575,7 +1527,6 @@ export default function ModernPOSPage() {
                     key={order.id}
                     className="card card-hover bg-white border-2 border-transparent hover:border-green-200 transition-all duration-300"
                   >
-                    {/* Order Header */}
                     <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-green-50 to-emerald-50">
                       <div className="flex items-center justify-between">
                         <div>
@@ -1599,7 +1550,6 @@ export default function ModernPOSPage() {
                       </div>
                     </div>
 
-                    {/* Order Items */}
                     <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
                       {order.items?.map((item, index) => (
                         <div
@@ -1643,7 +1593,6 @@ export default function ModernPOSPage() {
                       )) || []}
                     </div>
 
-                    {/* Order Actions */}
                     <div className="p-4 border-t border-neutral-200 bg-neutral-50">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-medium text-neutral-600">
@@ -1673,8 +1622,8 @@ export default function ModernPOSPage() {
                   No orders in queue
                 </h3>
                 <p className="text-neutral-500 max-w-sm mx-auto">
-                  New orders will appear here automatically when customers
-                  place them.
+                  New orders will appear here automatically when customers place
+                  them.
                 </p>
               </div>
             )}

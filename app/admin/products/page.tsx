@@ -1,7 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
-// Define types locally instead of importing from Prisma client
+import { useEffect, useMemo, useState } from "react";
+import { Pencil, Trash, XCircle, Package, Plus } from "lucide-react";
+import { useData } from "@/lib/data-context";
+import ImageUpload from "@/components/admin/image-upload";
+import {
+  AdminPageHeader,
+  AdminFormSection,
+  AdminInput,
+  AdminSelect,
+  AdminButton,
+  AdminTable,
+  AdminActions,
+  AdminCard,
+} from "@/components/admin";
+
+// -----------------------------
+// Types
+// -----------------------------
 type Category = "Meals" | "ColdBeverages" | "HotBeverages";
 
 interface Ingredient {
@@ -21,40 +37,38 @@ interface Material {
   packagePrice?: number;
   unitsPerPackage?: number;
 }
-import { Pencil, Trash, PlusCircle, XCircle, Package, Plus } from "lucide-react";
-import CustomSelect from "@/components/custom-select";
-import { useData } from "@/lib/data-context";
-import ImageUpload from "@/components/admin/image-upload";
-import {
-  AdminPageHeader,
-  AdminFormSection,
-  AdminInput,
-  AdminSelect,
-  AdminButton,
-  AdminTable,
-  AdminActions,
-  AdminCard
-} from "@/components/admin";
-
-type FlavorName = "Original" | "Chocolate" | "Vanilla" | "Strawberry" | "Caramel" | "Matcha" | "Hazelnut" | "Mocha" | "Irish Cream" | "Taro" | "Honeydew" | "Mango" | "Coconut";
-const allFlavorOptions: FlavorName[] = [
-  "Original",
-  "Chocolate", 
-  "Vanilla",
-  "Strawberry",
-  "Caramel",
-  "Matcha",
-  "Hazelnut",
-  "Mocha", 
-  "Irish Cream",
-  "Taro",
-  "Honeydew",
-  "Mango",
-  "Coconut",
-];
 
 type SizeName = "8oz" | "12oz" | "Medium" | "Large" | "Single";
 
+interface FlavorInput {
+  name: string;
+}
+
+interface SizeInput {
+  name: SizeName;
+  price: number;
+  materials: { id: string; quantity: number }[];
+  ingredients: { id: string; quantity: number }[];
+}
+
+interface ProductRow {
+  id: string;
+  name: string;
+  category: Category;
+  imageUrl: string | null;
+  flavors: { id: string; name: string }[];
+  sizes: {
+    id: string;
+    name: SizeName;
+    price: number;
+    materials: { material: Material; quantityUsed: number }[];
+    ingredients: { ingredient: Ingredient; quantityUsed: number }[];
+  }[];
+}
+
+// -----------------------------
+// Helpers
+// -----------------------------
 const getSizeOptionsForCategory = (category: Category): SizeName[] => {
   switch (category) {
     case "HotBeverages":
@@ -68,37 +82,20 @@ const getSizeOptionsForCategory = (category: Category): SizeName[] => {
   }
 };
 
-interface FlavorInput {
-  name: string;
-}
-
-interface SizeInput {
-  name: SizeName;
-  price: number;
-  materials: { id: string; quantity: number }[];
-  ingredients: { id: string; quantity: number }[];
-}
-
-interface Product {
-  id: string;
-  name: string;
-  category: Category;
-  imageUrl: string | null;
-  flavors: {
-    id: string;
-    name: string;
-  }[];
-  sizes: {
-    id: string;
-    name: SizeName;
-    price: number;
-    materials: { material: Material; quantityUsed: number }[];
-    ingredients: { ingredient: Ingredient; quantityUsed: number }[];
-  }[];
-}
-
+// -----------------------------
+// Component
+// -----------------------------
 export default function ProductsAdminPage() {
-  const { products, materials, ingredients, flavors: dynamicFlavors, createProduct, updateProduct, deleteProduct } = useData();
+  const {
+    products,
+    materials,
+    ingredients,
+    flavors: dynamicFlavors, // [{id,name}]
+    createProduct,
+    updateProduct,
+    deleteProduct,
+  } = useData();
+
   const [name, setName] = useState("");
   const [category, setCategory] = useState<Category>("Meals");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -106,13 +103,43 @@ export default function ProductsAdminPage() {
   const [sizes, setSizes] = useState<SizeInput[]>([]);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
-  // Update sizes when category changes
+  // Make a fast lookup of available flavor names (from dynamic list)
+  const availableFlavorNames = useMemo(
+    () => (dynamicFlavors || []).map((f: any) => f.name),
+    [dynamicFlavors]
+  );
+
+  // When category changes and there are no sizes yet, prefill with the first option
   useEffect(() => {
-    const availableSizes = getSizeOptionsForCategory(category);
-    if (availableSizes.length > 0 && sizes.length === 0) {
-      setSizes([{ name: availableSizes[0], price: 0, materials: [], ingredients: [] }]);
+    const options = getSizeOptionsForCategory(category);
+    if (options.length > 0 && sizes.length === 0) {
+      setSizes([
+        { name: options[0], price: 0, materials: [], ingredients: [] },
+      ]);
     }
   }, [category, sizes.length]);
+
+  // If category changes during edit and some sizes are invalid for the new category,
+  // keep the ones that still apply. If none apply, add the first default one.
+  useEffect(() => {
+    const options = new Set(getSizeOptionsForCategory(category));
+    const filtered = sizes.filter((s) => options.has(s.name));
+    if (filtered.length !== sizes.length) {
+      setSizes(
+        filtered.length > 0
+          ? filtered
+          : [
+              {
+                name: [...options][0],
+                price: 0,
+                materials: [],
+                ingredients: [],
+              },
+            ]
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category]);
 
   const resetForm = () => {
     setEditingProductId(null);
@@ -126,17 +153,38 @@ export default function ProductsAdminPage() {
   const isFormValid = () => {
     if (!name.trim()) return false;
     if (sizes.length === 0) return false;
-    return sizes.some(size => size.price > 0);
+    if (!sizes.some((s) => s.price > 0)) return false;
+    // Ensure all flavor names are valid (present in dynamicFlavors)
+    const invalidFlavor = flavors.find(
+      (f) => !f.name || !availableFlavorNames.includes(f.name)
+    );
+    if (invalidFlavor) return false;
+    return true;
   };
 
   const handleSave = async () => {
     try {
-      const payload = { name, category, imageUrl, flavors, sizes };
+      const payload = {
+        name,
+        category,
+        imageUrl,
+        // Persist just {name} for flavors (IDs are resolved inside the DB layer)
+        flavors: flavors.map((f) => ({ name: f.name })),
+        // Persist sizes as provided
+        sizes: sizes.map((s) => ({
+          name: s.name,
+          price: s.price,
+          materials: s.materials,
+          ingredients: s.ingredients,
+        })),
+      };
+
       if (editingProductId) {
         await updateProduct(editingProductId, payload);
       } else {
         await createProduct(payload);
       }
+
       resetForm();
     } catch (error) {
       console.error("Save failed:", error);
@@ -148,43 +196,46 @@ export default function ProductsAdminPage() {
     if (!confirm("Delete this product?")) return;
     try {
       await deleteProduct(id);
+      if (editingProductId === id) resetForm();
     } catch (error) {
       console.error("Delete failed:", error);
       alert("Delete failed");
     }
   };
 
-  const startEdit = (p: Product) => {
+  const startEdit = (p: ProductRow) => {
     setEditingProductId(p.id);
     setName(p.name || "");
     setCategory(p.category || "Meals");
     setImageUrl(p.imageUrl || null);
-    setFlavors(
-      (p.flavors || []).map((f) => ({
-        name: f.name,
-      }))
-    );
+
+    // Map flavors to {name}
+    setFlavors((p.flavors || []).map((f) => ({ name: f.name })));
+
+    // Map sizes to {name, price, materials[], ingredients[]}
     setSizes(
       (p.sizes || []).map((s) => ({
         name: s.name,
         price: s.price || 0,
         materials: (s.materials || []).map((m: any) => ({
-          id: m.material?.id || m.id,
-          quantity: m.quantityUsed || m.quantity || 0,
+          id: m.material?.id ?? m.id,
+          quantity: m.quantityUsed ?? m.quantity ?? 0,
         })),
         ingredients: (s.ingredients || []).map((i: any) => ({
-          id: i.ingredient?.id || i.id,
-          quantity: i.quantityUsed || i.quantity || 0,
+          id: i.ingredient?.id ?? i.id,
+          quantity: i.quantityUsed ?? i.quantity ?? 0,
         })),
       }))
     );
   };
 
-  // Prepare table columns
+  // -----------------------------
+  // Table Columns
+  // -----------------------------
   const tableColumns = [
     {
-      header: 'Image',
-      accessor: 'imageUrl',
+      header: "Image",
+      accessor: "imageUrl",
       cell: (row: any) => (
         <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
           {row.imageUrl ? (
@@ -199,52 +250,58 @@ export default function ProductsAdminPage() {
             </div>
           )}
         </div>
-      )
+      ),
     },
+    { header: "Name", accessor: "name" },
     {
-      header: 'Name',
-      accessor: 'name',
-    },
-    {
-      header: 'Category',
-      accessor: 'category',
+      header: "Category",
+      accessor: "category",
       cell: (row: any) => (
         <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
-          {row.category.replace(/([a-z])([A-Z])/g, '$1 $2')}
+          {row.category.replace(/([a-z])([A-Z])/g, "$1 $2")}
         </span>
-      )
+      ),
     },
     {
-      header: 'Flavors',
-      accessor: 'flavors',
+      header: "Flavors",
+      accessor: "flavors",
       cell: (row: any) => (
         <div className="space-y-1">
-          {row.flavors?.map((f: any, i: number) => (
-            <div key={i} className="text-sm">
-              <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                {f.name}
-              </span>
-            </div>
-          ))}
+          {row.flavors?.length ? (
+            row.flavors.map((f: any, i: number) => (
+              <div key={`${row.id}_fl_${i}`} className="text-sm">
+                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                  {f.name}
+                </span>
+              </div>
+            ))
+          ) : (
+            <span className="text-xs text-gray-500">—</span>
+          )}
         </div>
-      )
+      ),
     },
     {
-      header: 'Sizes',
-      accessor: 'sizes',
+      header: "Sizes",
+      accessor: "sizes",
       cell: (row: any) => (
         <div className="space-y-2">
-          {row.sizes?.map((s: any, i: number) => (
-            <div key={i} className="text-sm">
-              <span className="font-medium">{s.name}</span> - ₱{s.price?.toFixed(2)}
-            </div>
-          ))}
+          {row.sizes?.length ? (
+            row.sizes.map((s: any, i: number) => (
+              <div key={`${row.id}_sz_${i}`} className="text-sm">
+                <span className="font-medium">{s.name}</span> - ₱
+                {typeof s.price === "number" ? s.price.toFixed(2) : "0.00"}
+              </div>
+            ))
+          ) : (
+            <span className="text-xs text-gray-500">—</span>
+          )}
         </div>
-      )
+      ),
     },
     {
-      header: 'Actions',
-      accessor: 'id',
+      header: "Actions",
+      accessor: "id",
       cell: (row: any) => (
         <div className="flex items-center gap-2">
           <AdminButton
@@ -264,10 +321,13 @@ export default function ProductsAdminPage() {
             Delete
           </AdminButton>
         </div>
-      )
-    }
+      ),
+    },
   ];
 
+  // -----------------------------
+  // UI
+  // -----------------------------
   return (
     <div className="space-y-8">
       <AdminPageHeader
@@ -277,7 +337,7 @@ export default function ProductsAdminPage() {
       />
 
       <AdminFormSection
-        title="Create New Product"
+        title={editingProductId ? "Edit Product" : "Create New Product"}
         description="Add a new product with flavors, sizes, materials, and ingredients"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -301,28 +361,27 @@ export default function ProductsAdminPage() {
         </div>
 
         <div className="mt-6">
-          <ImageUpload
-            value={imageUrl}
-            onChange={setImageUrl}
-          />
+          <ImageUpload value={imageUrl} onChange={setImageUrl} />
         </div>
 
         <div className="space-y-6">
+          {/* Flavors */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="text-lg font-semibold text-gray-900">Product Flavors</h4>
+              <h4 className="text-lg font-semibold text-gray-900">
+                Product Flavors
+              </h4>
               <AdminButton
                 size="sm"
                 variant="outline"
                 icon={<Plus size={16} />}
-                disabled={flavors.length >= dynamicFlavors.length}
+                disabled={flavors.length >= availableFlavorNames.length}
                 onClick={() => {
-                  const availableFlavor = dynamicFlavors.find(
-                    (flavor) => !flavors.some((f) => f.name === flavor.name)
+                  const next = (dynamicFlavors || []).find(
+                    (fl: any) => !flavors.some((f) => f.name === fl.name)
                   );
-                  if (availableFlavor) {
-                    setFlavors([...flavors, { name: availableFlavor.name }]);
-                  }
+                  if (next)
+                    setFlavors((prev) => [...prev, { name: next.name }]);
                 }}
               >
                 Add Flavor
@@ -331,33 +390,47 @@ export default function ProductsAdminPage() {
 
             {flavors.map((flavor, idx) => (
               <FlavorEditor
-                key={idx}
+                key={`${flavor.name}_${idx}`}
                 idx={idx}
                 flavor={flavor}
                 flavors={flavors}
                 setFlavors={setFlavors}
-                dynamicFlavors={dynamicFlavors}
+                dynamicFlavors={dynamicFlavors || []}
               />
             ))}
+
+            {flavors.length === 0 && (
+              <p className="text-xs text-gray-500">
+                Optional: add one or more flavors so the POS can ask for a
+                flavor when ordering.
+              </p>
+            )}
           </div>
 
+          {/* Sizes */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="text-lg font-semibold text-gray-900">Product Sizes</h4>
+              <h4 className="text-lg font-semibold text-gray-900">
+                Product Sizes
+              </h4>
               <AdminButton
                 size="sm"
                 variant="outline"
                 icon={<Plus size={16} />}
-                disabled={sizes.length >= getSizeOptionsForCategory(category).length}
+                disabled={
+                  sizes.length >= getSizeOptionsForCategory(category).length
+                }
                 onClick={() => {
-                  const availableOptions = getSizeOptionsForCategory(category);
-                  const name = availableOptions.find(
+                  const options = getSizeOptionsForCategory(category);
+                  const name = options.find(
                     (opt) => !sizes.some((s) => s.name === opt)
-                  )!;
-                  setSizes([
-                    ...sizes,
-                    { name, price: 0, materials: [], ingredients: [] },
-                  ]);
+                  );
+                  if (name) {
+                    setSizes((prev) => [
+                      ...prev,
+                      { name, price: 0, materials: [], ingredients: [] },
+                    ]);
+                  }
                 }}
               >
                 Add Size
@@ -366,7 +439,7 @@ export default function ProductsAdminPage() {
 
             {sizes.map((size, idx) => (
               <SizeEditor
-                key={idx}
+                key={`${size.name}_${idx}`}
                 idx={idx}
                 size={size}
                 sizes={sizes}
@@ -380,10 +453,7 @@ export default function ProductsAdminPage() {
         </div>
 
         <AdminActions>
-          <AdminButton
-            variant="secondary"
-            onClick={resetForm}
-          >
+          <AdminButton variant="secondary" onClick={resetForm}>
             Cancel
           </AdminButton>
           <AdminButton
@@ -399,11 +469,13 @@ export default function ProductsAdminPage() {
       <AdminCard>
         <div className="mb-6">
           <h3 className="text-xl font-bold text-gray-900 mb-2">All Products</h3>
-          <p className="text-gray-600">Manage and edit your existing products</p>
+          <p className="text-gray-600">
+            Manage and edit your existing products
+          </p>
         </div>
         <AdminTable
           columns={tableColumns}
-          data={products}
+          data={products as ProductRow[]}
           emptyMessage="No products found. Create your first product above."
         />
       </AdminCard>
@@ -411,6 +483,9 @@ export default function ProductsAdminPage() {
   );
 }
 
+// -----------------------------
+// Sub-components
+// -----------------------------
 function FlavorEditor({
   idx,
   flavor,
@@ -422,10 +497,23 @@ function FlavorEditor({
   flavor: FlavorInput;
   flavors: FlavorInput[];
   setFlavors: React.Dispatch<React.SetStateAction<FlavorInput[]>>;
-  dynamicFlavors: any[];
+  dynamicFlavors: { id: string; name: string }[];
 }) {
   const update = (f: FlavorInput) =>
     setFlavors(flavors.map((x, i) => (i === idx ? f : x)));
+
+  // Options = all dynamic flavors that are not already selected,
+  // plus the current one (so it stays selectable).
+  const options = useMemo(
+    () =>
+      dynamicFlavors
+        .filter(
+          (df) =>
+            df.name === flavor.name || !flavors.some((f) => f.name === df.name)
+        )
+        .map((df) => ({ label: df.name, value: df.name })),
+    [dynamicFlavors, flavors, flavor.name]
+  );
 
   return (
     <AdminCard className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
@@ -433,17 +521,13 @@ function FlavorEditor({
         <AdminSelect
           label="Flavor"
           value={flavor.name}
-          onChange={(e) => update({ ...flavor, name: e.target.value as string })}
-          options={dynamicFlavors
-            .filter(
-              (dynamicFlavor) =>
-                dynamicFlavor.name === flavor.name || !flavors.some((f) => f.name === dynamicFlavor.name)
-            )
-            .map((dynamicFlavor) => ({ label: dynamicFlavor.name, value: dynamicFlavor.name }))}
+          onChange={(e) =>
+            update({ ...flavor, name: e.target.value as string })
+          }
+          options={options}
           fullWidth={false}
           className="w-40"
         />
-
         <div className="mt-6">
           <AdminButton
             size="sm"
@@ -479,19 +563,26 @@ function SizeEditor({
   const update = (s: SizeInput) =>
     setSizes(sizes.map((x, i) => (i === idx ? s : x)));
 
+  const sizeOptions = useMemo(
+    () =>
+      getSizeOptionsForCategory(category)
+        .filter(
+          (opt) => opt === size.name || !sizes.some((s) => s.name === opt)
+        )
+        .map((opt) => ({ label: opt, value: opt })),
+    [category, size.name, sizes]
+  );
+
   return (
     <AdminCard className="bg-gradient-to-br from-gray-50 to-white border-gray-200">
       <div className="flex items-center gap-4 mb-6">
         <AdminSelect
           label="Size"
           value={size.name}
-          onChange={(e) => update({ ...size, name: e.target.value as SizeName })}
-          options={getSizeOptionsForCategory(category)
-            .filter(
-              (opt) =>
-                opt === size.name || !sizes.some((s) => s.name === opt)
-            )
-            .map((opt) => ({ label: opt, value: opt }))}
+          onChange={(e) =>
+            update({ ...size, name: e.target.value as SizeName })
+          }
+          options={sizeOptions}
           fullWidth={false}
           className="w-40"
         />
@@ -520,8 +611,13 @@ function SizeEditor({
       </div>
 
       <div className="mt-6">
-        <h5 className="text-sm font-semibold text-gray-700 mb-3">Inventory Tracking (Optional)</h5>
-        <p className="text-xs text-gray-500 mb-4">Add materials and ingredients used for this size to automatically deduct stock when sold.</p>
+        <h5 className="text-sm font-semibold text-gray-700 mb-3">
+          Inventory Tracking (Optional)
+        </h5>
+        <p className="text-xs text-gray-500 mb-4">
+          Add materials and ingredients used for this size to automatically
+          deduct stock when sold.
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <NestedSelectors
             title="Materials"
@@ -541,7 +637,14 @@ function SizeEditor({
   );
 }
 
-function NestedSelectors<T extends { id: string; name: string; measurementUnit?: string; pricePerPiece?: number }>({
+function NestedSelectors<
+  T extends {
+    id: string;
+    name: string;
+    measurementUnit?: string;
+    pricePerPiece?: number;
+  }
+>({
   title,
   items,
   all,
@@ -553,11 +656,11 @@ function NestedSelectors<T extends { id: string; name: string; measurementUnit?:
   onChange: (items: { id: string; quantity: number }[]) => void;
 }) {
   const getUnit = (item: T) => {
-    if ('measurementUnit' in item && item.measurementUnit) {
+    if ("measurementUnit" in item && item.measurementUnit)
       return item.measurementUnit;
-    }
-    return 'piece';
+    return "piece";
   };
+
   return (
     <div className="space-y-4">
       <div>
@@ -567,7 +670,10 @@ function NestedSelectors<T extends { id: string; name: string; measurementUnit?:
           value=""
           onChange={(e) => {
             if (e.target.value) {
-              onChange([...items, { id: e.target.value as string, quantity: 1 }]);
+              onChange([
+                ...items,
+                { id: e.target.value as string, quantity: 1 },
+              ]);
             }
           }}
           options={all
@@ -581,7 +687,10 @@ function NestedSelectors<T extends { id: string; name: string; measurementUnit?:
           {items.map((it, i) => {
             const found = all.find((x) => x.id === it.id);
             return (
-              <div key={it.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
+              <div
+                key={it.id}
+                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200"
+              >
                 <div className="flex-1">
                   <span className="text-sm font-medium text-gray-900">
                     {found?.name || "Unknown"}
@@ -626,4 +735,3 @@ function NestedSelectors<T extends { id: string; name: string; measurementUnit?:
     </div>
   );
 }
-
