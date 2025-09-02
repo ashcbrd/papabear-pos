@@ -12,7 +12,7 @@ const logError = (message: string, error: any) => {
 
 // Database configuration
 const DB_NAME = 'papabear_pos.db';
-const DB_VERSION = 2; // Increased version for schema updates
+const DB_VERSION = 3; // Increased version for measurementUnit schema updates
 
 class SQLiteService {
   private sqliteConnection: SQLiteConnection | null = null;
@@ -79,6 +79,16 @@ class SQLiteService {
       await this.createTables();
       log('Tables created successfully');
       
+      // Handle migration for ingredients table
+      log('Migrating ingredients table...');
+      await this.migrateIngredientsTable();
+      log('Ingredients migration completed');
+      
+      // Force verification of ingredients table schema
+      log('Verifying ingredients table schema...');
+      await this.verifyIngredientsSchema();
+      log('Schema verification completed');
+      
       // Clean up duplicates if any exist
       log('Cleaning up duplicates...');
       await this.removeDuplicates();
@@ -95,6 +105,109 @@ class SQLiteService {
       logError('Failed to initialize SQLite', error);
       this.initializationPromise = null;
       throw error;
+    }
+  }
+
+  private async migrateIngredientsTable(): Promise<void> {
+    if (!this.db) return;
+    
+    try {
+      // Check if ingredients table has the old 'unit' column instead of 'measurementUnit'
+      const tableInfo = await this.db.query(`PRAGMA table_info(ingredients)`);
+      const columns = tableInfo.values?.map((col: any) => col.name) || [];
+      
+      log('Ingredients table columns:', columns);
+      
+      if (columns.includes('unit') && !columns.includes('measurementUnit')) {
+        log('Migrating ingredients table from unit to measurementUnit...');
+        
+        // Rename the table temporarily
+        await this.db.execute(`ALTER TABLE ingredients RENAME TO ingredients_old`);
+        
+        // Create new table with correct schema
+        await this.db.execute(`
+          CREATE TABLE ingredients (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            measurementUnit TEXT NOT NULL,
+            pricePerPurchase REAL NOT NULL CHECK(pricePerPurchase >= 0),
+            unitsPerPurchase REAL NOT NULL CHECK(unitsPerPurchase > 0),
+            pricePerUnit REAL NOT NULL CHECK(pricePerUnit >= 0),
+            createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+          )
+        `);
+        
+        // Copy data from old table to new table
+        await this.db.execute(`
+          INSERT INTO ingredients (id, name, measurementUnit, pricePerPurchase, unitsPerPurchase, pricePerUnit, createdAt)
+          SELECT id, name, unit as measurementUnit, pricePerPurchase, unitsPerPurchase, pricePerUnit, createdAt
+          FROM ingredients_old
+        `);
+        
+        // Drop old table
+        await this.db.execute(`DROP TABLE ingredients_old`);
+        
+        log('✅ Successfully migrated ingredients table');
+      } else {
+        log('Ingredients table already has correct schema');
+        
+        // Fix any existing ingredients with NULL measurementUnit
+        const nullUnitCount = await this.db.query(
+          'SELECT COUNT(*) as count FROM ingredients WHERE measurementUnit IS NULL OR measurementUnit = ""'
+        );
+        const count = nullUnitCount.values?.[0]?.count || 0;
+        
+        if (count > 0) {
+          log(`Found ${count} ingredients with null/empty measurementUnit, fixing...`);
+          await this.db.execute(
+            'UPDATE ingredients SET measurementUnit = "kg" WHERE measurementUnit IS NULL OR measurementUnit = ""'
+          );
+          log('✅ Fixed null measurementUnit values');
+        }
+      }
+    } catch (error) {
+      logError('Failed to migrate ingredients table', error);
+    }
+  }
+
+  private async verifyIngredientsSchema(): Promise<void> {
+    if (!this.db) return;
+    
+    try {
+      // Get table info to verify schema
+      const tableInfo = await this.db.query(`PRAGMA table_info(ingredients)`);
+      const columns = tableInfo.values?.map((col: any) => ({ name: col.name, type: col.type })) || [];
+      
+      log('Current ingredients table schema:', columns);
+      
+      // Check if measurementUnit column exists
+      const hasMeasurementUnit = columns.some(col => col.name === 'measurementUnit');
+      const hasUnit = columns.some(col => col.name === 'unit');
+      
+      log(`Schema check: measurementUnit=${hasMeasurementUnit}, unit=${hasUnit}`);
+      
+      
+      if (!hasMeasurementUnit) {
+        logError('CRITICAL: ingredients table missing measurementUnit column!', null);
+        
+        // Force drop and recreate table if schema is wrong
+        log('Forcing ingredients table recreation...');
+        await this.db.execute(`DROP TABLE IF EXISTS ingredients`);
+        await this.db.execute(`
+          CREATE TABLE ingredients (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            measurementUnit TEXT NOT NULL,
+            pricePerPurchase REAL NOT NULL CHECK(pricePerPurchase >= 0),
+            unitsPerPurchase REAL NOT NULL CHECK(unitsPerPurchase > 0),
+            pricePerUnit REAL NOT NULL CHECK(pricePerUnit >= 0),
+            createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+          )
+        `);
+        log('✅ Forced recreation of ingredients table completed');
+      }
+    } catch (error) {
+      logError('Failed to verify ingredients schema', error);
     }
   }
 
@@ -138,7 +251,7 @@ class SQLiteService {
       `CREATE TABLE IF NOT EXISTS ingredients (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
-        unit TEXT NOT NULL,
+        measurementUnit TEXT NOT NULL,
         pricePerPurchase REAL NOT NULL CHECK(pricePerPurchase >= 0),
         unitsPerPurchase REAL NOT NULL CHECK(unitsPerPurchase > 0),
         pricePerUnit REAL NOT NULL CHECK(pricePerUnit >= 0),
@@ -512,15 +625,19 @@ class SQLiteService {
       const id = this.generateUUID();
       const pricePerUnit = pricePerPurchase / unitsPerPurchase;
       
-      await this.db.run(
-        'INSERT OR IGNORE INTO ingredients (id, name, unit, pricePerPurchase, unitsPerPurchase, pricePerUnit) VALUES (?, ?, ?, ?, ?, ?)',
-        [id, name, unit, pricePerPurchase, unitsPerPurchase, pricePerUnit]
+      // Ensure unit is not null or undefined
+      const safeUnit = unit || 'kg'; // fallback to kg if unit is empty
+      
+      // Try to insert, handle duplicates gracefully
+      const insertResult = await this.db.run(
+        'INSERT OR REPLACE INTO ingredients (id, name, measurementUnit, pricePerPurchase, unitsPerPurchase, pricePerUnit) VALUES (?, ?, ?, ?, ?, ?)',
+        [id, name, safeUnit, pricePerPurchase, unitsPerPurchase, pricePerUnit]
       );
       
       const result = await this.db.query('SELECT id FROM ingredients WHERE name = ?', [name]);
       return result.values?.[0]?.id || null;
     } catch (error) {
-      console.error('Error creating ingredient:', error);
+      logError('Error creating ingredient', error);
       return null;
     }
   }
@@ -921,7 +1038,7 @@ class SQLiteService {
     try {
       const pricePerUnit = pricePerPurchase / unitsPerPurchase;
       const result = await this.db.run(
-        'UPDATE ingredients SET name = ?, unit = ?, pricePerPurchase = ?, unitsPerPurchase = ?, pricePerUnit = ? WHERE id = ?',
+        'UPDATE ingredients SET name = ?, measurementUnit = ?, pricePerPurchase = ?, unitsPerPurchase = ?, pricePerUnit = ? WHERE id = ?',
         [name, unit, pricePerPurchase, unitsPerPurchase, pricePerUnit, id]
       );
       return (result.changes ?? 0) > 0;

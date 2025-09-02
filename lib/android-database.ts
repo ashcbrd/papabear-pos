@@ -615,25 +615,42 @@ class AndroidDatabaseService implements DatabaseService {
           });
           
           if (addon.stockQuantity !== undefined && addon.stockQuantity !== null) {
-            // Use direct database approach like materials/ingredients
-            const stockQuantity = Number(addon.stockQuantity);
-            await this.db.run(
-              "INSERT INTO stock (id, quantity, addonId, updatedAt) VALUES (?, ?, ?, datetime('now'))",
-              [this.generateId(), stockQuantity, id]
-            );
-            console.log("💾 Addon stock creation result: success");
+            try {
+              // Use direct database approach like materials/ingredients
+              const stockQuantity = Number(addon.stockQuantity);
+              await this.db.run(
+                "INSERT INTO stock (id, quantity, addonId, updatedAt) VALUES (?, ?, ?, datetime('now'))",
+                [this.generateId(), stockQuantity, id]
+              );
+              console.log("💾 Addon stock creation result: success");
+            } catch (stockError) {
+              console.error("⚠️ Addon stock creation failed, but addon was created:", stockError);
+              // Don't throw - addon creation succeeded
+            }
           }
           
           // Fetch the complete item with stock information
-          const all = await sqliteService.getAllAddons();
-          const createdItem = all.find(
-            (x: any) => x.id === id
-          );
-          
-          if (createdItem) {
+          try {
+            const all = await sqliteService.getAllAddons();
+            const createdItem = all.find(
+              (x: any) => x.id === id
+            );
+            
+            if (createdItem) {
+              return {
+                ...createdItem,
+                stock: { quantity: createdItem.stockQuantity || 0 },
+              };
+            }
+          } catch (refetchError) {
+            console.error("⚠️ Addon refetch failed, returning basic data:", refetchError);
+            // Return basic data if refetch fails
             return {
-              ...createdItem,
-              stock: { quantity: createdItem.stockQuantity || 0 },
+              id,
+              name: addon.name,
+              price: addon.price,
+              createdAt: new Date().toISOString(),
+              stock: { quantity: Number(addon.stockQuantity) || 0 },
             };
           }
           
@@ -753,60 +770,70 @@ class AndroidDatabaseService implements DatabaseService {
 
     if (Capacitor.isNativePlatform()) {
       try {
-        const id = await sqliteService.createIngredient(
-          ingredient.name,
-          ingredient.measurementUnit,
-          ingredient.pricePerPurchase,
-          ingredient.unitsPerPurchase
+        if (!this.db) {
+          throw new Error("Database not initialized in createIngredient!");
+        }
+        
+        // Use same direct approach as updateIngredient (which works)
+        const id = this.generateId();
+        const now = new Date().toISOString();
+        const safeUnit = ingredient.measurementUnit || "kg";
+        const pricePerUnit = ingredient.pricePerPurchase / (ingredient.unitsPerPurchase || 1);
+        
+        
+        // Direct database insert - same pattern as update function
+        await this.db.run(
+          "INSERT INTO ingredients (id, name, measurementUnit, pricePerPurchase, unitsPerPurchase, pricePerUnit, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [id, ingredient.name, safeUnit, ingredient.pricePerPurchase, ingredient.unitsPerPurchase, pricePerUnit, now]
         );
+        
+        
         if (id) {
-          console.log("🔍 Creating ingredient stock:", { 
-            id, 
-            stockQuantity: ingredient.stockQuantity,
-            hasStock: ingredient.stockQuantity !== undefined
-          });
           
           if (ingredient.stockQuantity !== undefined && ingredient.stockQuantity !== null) {
-            // Use same proven logic as updateIngredient method
-            const stockQuantity = Number(ingredient.stockQuantity);
-            await this.db.run(
-              "INSERT INTO stock (id, quantity, ingredientId, updatedAt) VALUES (?, ?, ?, datetime('now'))",
-              [this.generateId(), stockQuantity, id]
-            );
-            console.log("💾 Ingredient stock creation result: success");
+            try {
+              // Use same proven logic as updateIngredient method
+              const stockQuantity = Number(ingredient.stockQuantity);
+              await this.db.run(
+                "INSERT INTO stock (id, quantity, ingredientId, updatedAt) VALUES (?, ?, ?, datetime('now'))",
+                [this.generateId(), stockQuantity, id]
+              );
+              console.log("💾 Ingredient stock creation result: success");
+            } catch (stockError) {
+              console.error("⚠️ Stock creation failed, but ingredient was created:", stockError);
+              // Don't throw - ingredient creation succeeded
+            }
           }
-          // Fetch the complete item with stock information
-          const all = await sqliteService.getAllIngredients();
-          const createdItem = all.find(
-            (x: any) => x.id === id
-          );
           
-          if (createdItem) {
+          // Refetch the created ingredient with proper stock data from database
+          try {
+            const ingredients = await sqliteService.getAllIngredients();
+            const createdIngredient = ingredients.find((i: any) => i.id === id);
+            
+            if (createdIngredient) {
+              return {
+                ...createdIngredient,
+                stock: { quantity: createdIngredient.stockQuantity || 0 },
+              };
+            }
+          } catch (refetchError) {
+            console.error("⚠️ Refetch failed, returning basic ingredient data:", refetchError);
+            // Return basic data if refetch fails
             return {
-              ...createdItem,
-              stock: { quantity: createdItem.stockQuantity || 0 },
+              id,
+              name: ingredient.name,
+              measurementUnit: safeUnit,
+              pricePerPurchase: ingredient.pricePerPurchase,
+              unitsPerPurchase: ingredient.unitsPerPurchase,
+              pricePerUnit,
+              createdAt: now,
+              stock: { quantity: Number(ingredient.stockQuantity) || 0 },
             };
           }
-          
-          // Fallback return (shouldn't happen)
-          return {
-            id,
-            name: ingredient.name,
-            measurementUnit: ingredient.measurementUnit,
-            pricePerPurchase: ingredient.pricePerPurchase,
-            unitsPerPurchase: ingredient.unitsPerPurchase,
-            pricePerUnit:
-              ingredient.pricePerPurchase / ingredient.unitsPerPurchase,
-            createdAt: new Date().toISOString(),
-            stock: { quantity: ingredient.stockQuantity || 0 },
-          };
         }
-        const all = await sqliteService.getAllIngredients();
-        return (
-          all.find(
-            (x: any) => x.name.toLowerCase() === ingredient.name.toLowerCase()
-          ) || null
-        );
+        
+        // Fallback - shouldn't happen
+        return null;
       } catch (e) {
         console.error("❌ createIngredient:", e);
         throw e;
@@ -834,11 +861,13 @@ class AndroidDatabaseService implements DatabaseService {
         : ingredient.pricePerUnit;
 
     if (Capacitor.isNativePlatform() && this.db) {
+      const updateUnit = ingredient.measurementUnit || ingredient.unit;
+      
       await this.db.run(
-        "UPDATE ingredients SET name = ?, unit = ?, pricePerPurchase = ?, unitsPerPurchase = ?, pricePerUnit = ? WHERE id = ?",
+        "UPDATE ingredients SET name = ?, measurementUnit = ?, pricePerPurchase = ?, unitsPerPurchase = ?, pricePerUnit = ? WHERE id = ?",
         [
           ingredient.name,
-          ingredient.measurementUnit || ingredient.unit,
+          updateUnit,
           ingredient.pricePerPurchase,
           ingredient.unitsPerPurchase,
           pricePerUnit,
@@ -943,24 +972,45 @@ class AndroidDatabaseService implements DatabaseService {
           });
           
           if (material.stockQuantity !== undefined && material.stockQuantity !== null) {
-            // Use same proven logic as updateMaterial method
-            const stockQuantity = Number(material.stockQuantity);
-            await this.db.run(
-              "INSERT INTO stock (id, quantity, materialId, updatedAt) VALUES (?, ?, ?, datetime('now'))",
-              [this.generateId(), stockQuantity, id]
-            );
-            console.log("💾 Material stock creation result: success");
+            try {
+              // Use same proven logic as updateMaterial method
+              const stockQuantity = Number(material.stockQuantity);
+              await this.db.run(
+                "INSERT INTO stock (id, quantity, materialId, updatedAt) VALUES (?, ?, ?, datetime('now'))",
+                [this.generateId(), stockQuantity, id]
+              );
+              console.log("💾 Material stock creation result: success");
+            } catch (stockError) {
+              console.error("⚠️ Material stock creation failed, but material was created:", stockError);
+              // Don't throw - material creation succeeded
+            }
           }
-          // Fetch the complete item with stock information
-          const all = await sqliteService.getAllMaterials();
-          const createdItem = all.find(
-            (x: any) => x.id === id
-          );
           
-          if (createdItem) {
+          // Fetch the complete item with stock information
+          try {
+            const all = await sqliteService.getAllMaterials();
+            const createdItem = all.find(
+              (x: any) => x.id === id
+            );
+            
+            if (createdItem) {
+              return {
+                ...createdItem,
+                stock: { quantity: createdItem.stockQuantity || 0 },
+              };
+            }
+          } catch (refetchError) {
+            console.error("⚠️ Material refetch failed, returning basic data:", refetchError);
+            // Return basic data if refetch fails
             return {
-              ...createdItem,
-              stock: { quantity: createdItem.stockQuantity || 0 },
+              id,
+              name: material.name,
+              pricePerPiece: material.pricePerPiece,
+              isPackage: material.isPackage || false,
+              packagePrice: material.packagePrice,
+              unitsPerPackage: material.unitsPerPackage,
+              createdAt: new Date().toISOString(),
+              stock: { quantity: Number(material.stockQuantity) || 0 },
             };
           }
           

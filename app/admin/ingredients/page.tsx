@@ -30,7 +30,7 @@ const measurementUnits = [
 export default function IngredientsAdminPage() {
   const { ingredients, createIngredient, updateIngredient, deleteIngredient } = useData();
   const [name, setName] = useState("");
-  const [measurementUnit, setMeasurementUnit] = useState("piece");
+  const [measurementUnit, setMeasurementUnit] = useState(measurementUnits[0]);
   const [unitsPerPurchase, setUnitsPerPurchase] = useState<number>(1);
   const [pricePerPurchase, setPricePerPurchase] = useState<number>(0);
   const [pricePerUnit, setPricePerUnit] = useState<number>(0);
@@ -51,7 +51,7 @@ export default function IngredientsAdminPage() {
     setEditingId(null);
     setEditForm({});
     setName("");
-    setMeasurementUnit("piece");
+    setMeasurementUnit(measurementUnits[0]);
     setUnitsPerPurchase(1);
     setPricePerPurchase(0);
     setPricePerUnit(0);
@@ -67,19 +67,37 @@ export default function IngredientsAdminPage() {
 
   const handleCreateIngredient = async () => {
     try {
+      // Validate required fields
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        alert("Please enter an ingredient name");
+        return;
+      }
+      
+      if (!pricePerPurchase || pricePerPurchase <= 0) {
+        alert("Please enter a valid price per purchase");
+        return;
+      }
+      
+      if (!unitsPerPurchase || unitsPerPurchase <= 0) {
+        alert("Please enter valid units per purchase");
+        return;
+      }
+
       const payload: IngredientInput = {
-        name,
-        measurementUnit,
-        unitsPerPurchase,
-        pricePerPurchase,
-        stockQuantity,
+        name: trimmedName,
+        measurementUnit: measurementUnit || measurementUnits[0],
+        unitsPerPurchase: Number(unitsPerPurchase),
+        pricePerPurchase: Number(pricePerPurchase),
+        stockQuantity: Number(stockQuantity) || 0,
       };
+
 
       await createIngredient(payload);
       resetForm();
     } catch (error) {
       console.error("Failed to create ingredient:", error);
-      alert("Failed to create ingredient");
+      alert("Failed to create ingredient. Please check the console for details.");
     }
   };
 
@@ -237,7 +255,7 @@ export default function IngredientsAdminPage() {
 
           <AdminSelect
             label="Measurement Unit"
-            value={editingId ? (editForm.measurementUnit || 'piece') : measurementUnit}
+            value={editingId ? (editForm.measurementUnit || measurementUnits[0]) : measurementUnit}
             onChange={(e) => {
               if (editingId) {
                 setEditForm(prev => ({ ...prev, measurementUnit: e.target.value as string }));
@@ -299,7 +317,7 @@ export default function IngredientsAdminPage() {
             </label>
             <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
               <span className="text-lg font-semibold text-green-800">
-                ₱{(editingId ? (editForm.pricePerUnit || 0) : pricePerUnit).toFixed(2)} per {editingId ? (editForm.measurementUnit || 'piece') : measurementUnit}
+                ₱{(editingId ? (editForm.pricePerUnit || 0) : pricePerUnit).toFixed(2)} per {editingId ? (editForm.measurementUnit || measurementUnits[0]) : measurementUnit}
               </span>
             </div>
           </div>
