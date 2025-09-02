@@ -608,14 +608,42 @@ class AndroidDatabaseService implements DatabaseService {
       try {
         const id = await sqliteService.createAddon(addon.name, addon.price);
         if (id) {
-          if (addon.stockQuantity !== undefined) {
-            await sqliteService.updateStock("addon", id, addon.stockQuantity);
+          console.log("🔍 Creating addon stock:", { 
+            id, 
+            stockQuantity: addon.stockQuantity,
+            hasStock: addon.stockQuantity !== undefined
+          });
+          
+          if (addon.stockQuantity !== undefined && addon.stockQuantity !== null) {
+            // Use direct database approach like materials/ingredients
+            const stockQuantity = Number(addon.stockQuantity);
+            await this.db.run(
+              "INSERT INTO stock (id, quantity, addonId, updatedAt) VALUES (?, ?, ?, datetime('now'))",
+              [this.generateId(), stockQuantity, id]
+            );
+            console.log("💾 Addon stock creation result: success");
           }
+          
+          // Fetch the complete item with stock information
+          const all = await sqliteService.getAllAddons();
+          const createdItem = all.find(
+            (x: any) => x.id === id
+          );
+          
+          if (createdItem) {
+            return {
+              ...createdItem,
+              stock: { quantity: createdItem.stockQuantity || 0 },
+            };
+          }
+          
+          // Fallback return (shouldn't happen)
           return {
             id,
             name: addon.name,
             price: addon.price,
             createdAt: new Date().toISOString(),
+            stock: { quantity: addon.stockQuantity || 0 },
           };
         }
         const all = await sqliteService.getAllAddons();
@@ -732,13 +760,35 @@ class AndroidDatabaseService implements DatabaseService {
           ingredient.unitsPerPurchase
         );
         if (id) {
-          if (ingredient.stockQuantity !== undefined) {
-            await sqliteService.updateStock(
-              "ingredient",
-              id,
-              ingredient.stockQuantity
+          console.log("🔍 Creating ingredient stock:", { 
+            id, 
+            stockQuantity: ingredient.stockQuantity,
+            hasStock: ingredient.stockQuantity !== undefined
+          });
+          
+          if (ingredient.stockQuantity !== undefined && ingredient.stockQuantity !== null) {
+            // Use same proven logic as updateIngredient method
+            const stockQuantity = Number(ingredient.stockQuantity);
+            await this.db.run(
+              "INSERT INTO stock (id, quantity, ingredientId, updatedAt) VALUES (?, ?, ?, datetime('now'))",
+              [this.generateId(), stockQuantity, id]
             );
+            console.log("💾 Ingredient stock creation result: success");
           }
+          // Fetch the complete item with stock information
+          const all = await sqliteService.getAllIngredients();
+          const createdItem = all.find(
+            (x: any) => x.id === id
+          );
+          
+          if (createdItem) {
+            return {
+              ...createdItem,
+              stock: { quantity: createdItem.stockQuantity || 0 },
+            };
+          }
+          
+          // Fallback return (shouldn't happen)
           return {
             id,
             name: ingredient.name,
@@ -748,6 +798,7 @@ class AndroidDatabaseService implements DatabaseService {
             pricePerUnit:
               ingredient.pricePerPurchase / ingredient.unitsPerPurchase,
             createdAt: new Date().toISOString(),
+            stock: { quantity: ingredient.stockQuantity || 0 },
           };
         }
         const all = await sqliteService.getAllIngredients();
@@ -885,13 +936,35 @@ class AndroidDatabaseService implements DatabaseService {
           material.unitsPerPackage
         );
         if (id) {
-          if (material.stockQuantity !== undefined) {
-            await sqliteService.updateStock(
-              "material",
-              id,
-              material.stockQuantity
+          console.log("🔍 Creating material stock:", { 
+            id, 
+            stockQuantity: material.stockQuantity,
+            hasStock: material.stockQuantity !== undefined
+          });
+          
+          if (material.stockQuantity !== undefined && material.stockQuantity !== null) {
+            // Use same proven logic as updateMaterial method
+            const stockQuantity = Number(material.stockQuantity);
+            await this.db.run(
+              "INSERT INTO stock (id, quantity, materialId, updatedAt) VALUES (?, ?, ?, datetime('now'))",
+              [this.generateId(), stockQuantity, id]
             );
+            console.log("💾 Material stock creation result: success");
           }
+          // Fetch the complete item with stock information
+          const all = await sqliteService.getAllMaterials();
+          const createdItem = all.find(
+            (x: any) => x.id === id
+          );
+          
+          if (createdItem) {
+            return {
+              ...createdItem,
+              stock: { quantity: createdItem.stockQuantity || 0 },
+            };
+          }
+          
+          // Fallback return (shouldn't happen)
           return {
             id,
             name: material.name,
@@ -900,6 +973,7 @@ class AndroidDatabaseService implements DatabaseService {
             unitsPerPackage: material.unitsPerPackage,
             pricePerPiece: material.pricePerPiece || 0,
             createdAt: new Date().toISOString(),
+            stock: { quantity: material.stockQuantity || 0 },
           };
         }
         const all = await sqliteService.getAllMaterials();
@@ -1501,6 +1575,7 @@ class AndroidDatabaseService implements DatabaseService {
 
     if (Capacitor.isNativePlatform()) {
       const currentBalance = await sqliteService.getCashFlowBalance();
+      console.log("💰 Native cash balance calculated:", currentBalance);
       return { currentBalance, lastUpdated: new Date().toISOString() };
     } else {
       const tx = this.getFromWebStorage<any[]>(this.CASH_TX_KEY);
@@ -1700,18 +1775,26 @@ class AndroidDatabaseService implements DatabaseService {
     };
 
     if (Capacitor.isNativePlatform()) {
-      await sqliteService.recordCashFlowTransaction(transaction);
+      console.log("🔍 Recording cash flow transaction (native):", transaction);
+      const success = await sqliteService.recordCashFlowTransaction(transaction);
+      console.log("💾 SQLite transaction result:", success);
+      
+      if (!success) {
+        throw new Error("Failed to record cash flow transaction in SQLite database");
+      }
     } else {
+      console.log("🔍 Recording cash flow transaction (web):", transaction);
       const tx = this.getFromWebStorage<any[]>(this.CASH_TX_KEY);
       tx.push(transaction);
       this.setToWebStorage(this.CASH_TX_KEY, tx);
 
       if (inflowData.paymentMethod === "CASH" || !inflowData.paymentMethod) {
         const bal = this.getFromWebStorage<any>(this.DRAWER_KEY);
-        bal.currentBalance =
-          Number(bal.currentBalance || 0) + Math.abs(inflowData.amount);
+        const oldBalance = Number(bal.currentBalance || 0);
+        bal.currentBalance = oldBalance + Math.abs(inflowData.amount);
         bal.lastUpdated = new Date().toISOString();
         this.setToWebStorage(this.DRAWER_KEY, bal);
+        console.log(`💰 Web balance updated: ${oldBalance} → ${bal.currentBalance}`);
       }
     }
 

@@ -11,11 +11,12 @@ import {
   AdminButton,
   AdminTable,
   AdminActions,
-  AdminCard
+  AdminCard,
 } from "@/components/admin";
 
 export default function MaterialsAdminPage() {
-  const { materials, createMaterial, updateMaterial, deleteMaterial } = useData();
+  const { materials, createMaterial, updateMaterial, deleteMaterial } =
+    useData();
   const [name, setName] = useState("");
   const [isPackage, setIsPackage] = useState(false);
   const [packagePrice, setPackagePrice] = useState<number>(0);
@@ -46,9 +47,12 @@ export default function MaterialsAdminPage() {
 
   const isFormValid = () => {
     if (editingId) {
-      if (!(editForm.name || '').trim()) return false;
+      if (!(editForm.name || "").trim()) return false;
       if (editForm.isPackage) {
-        return (editForm.packagePrice || 0) > 0 && (editForm.unitsPerPackage || 0) > 0;
+        return (
+          (editForm.packagePrice || 0) > 0 &&
+          (editForm.unitsPerPackage || 0) > 0
+        );
       } else {
         return (editForm.pricePerPiece || 0) > 0;
       }
@@ -100,13 +104,15 @@ export default function MaterialsAdminPage() {
 
   const saveEdit = async () => {
     if (!editingId) return;
-    
+
     try {
       const payload = {
         name: editForm.name ?? "",
         isPackage: editForm.isPackage ?? false,
         packagePrice: editForm.isPackage ? editForm.packagePrice : undefined,
-        unitsPerPackage: editForm.isPackage ? editForm.unitsPerPackage : undefined,
+        unitsPerPackage: editForm.isPackage
+          ? editForm.unitsPerPackage
+          : undefined,
         pricePerPiece: !editForm.isPackage ? editForm.pricePerPiece : undefined,
         stockQuantity: editForm.stockQuantity ?? 0,
       };
@@ -135,23 +141,27 @@ export default function MaterialsAdminPage() {
   // Table columns configuration
   const tableColumns = [
     {
-      header: 'Name',
-      accessor: 'name',
+      header: "Name",
+      accessor: "name",
     },
     {
-      header: 'Type',
-      accessor: 'isPackage',
+      header: "Type",
+      accessor: "isPackage",
       cell: (row: any) => (
-        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-          row.isPackage ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-        }`}>
-          {row.isPackage ? 'Package' : 'Individual'}
+        <span
+          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+            row.isPackage
+              ? "bg-purple-100 text-purple-800"
+              : "bg-blue-100 text-blue-800"
+          }`}
+        >
+          {row.isPackage ? "Package" : "Individual"}
         </span>
-      )
+      ),
     },
     {
-      header: 'Pricing',
-      accessor: 'pricePerPiece',
+      header: "Pricing",
+      accessor: "pricePerPiece",
       cell: (row: any) => (
         <div className="space-y-1">
           <div className="font-medium text-green-600">
@@ -163,27 +173,31 @@ export default function MaterialsAdminPage() {
             </div>
           )}
         </div>
-      )
+      ),
     },
     {
-      header: 'Stock',
-      accessor: 'stock',
+      header: "Stock",
+      accessor: "stock",
       cell: (row: any) => {
         const quantity = row.stock?.quantity ?? 0;
         return (
-          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-            quantity > 50 ? 'bg-green-100 text-green-800' :
-            quantity > 20 ? 'bg-yellow-100 text-yellow-800' :
-            'bg-red-100 text-red-800'
-          }`}>
+          <span
+            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+              quantity > 50
+                ? "bg-green-100 text-green-800"
+                : quantity > 20
+                ? "bg-yellow-100 text-yellow-800"
+                : "bg-red-100 text-red-800"
+            }`}
+          >
             {quantity} pieces
           </span>
         );
-      }
+      },
     },
     {
-      header: 'Actions',
-      accessor: 'id',
+      header: "Actions",
+      accessor: "id",
       cell: (row: any) => (
         <div className="flex items-center gap-2">
           <AdminButton
@@ -203,8 +217,8 @@ export default function MaterialsAdminPage() {
             Delete
           </AdminButton>
         </div>
-      )
-    }
+      ),
+    },
   ];
 
   return (
@@ -217,16 +231,20 @@ export default function MaterialsAdminPage() {
 
       <AdminFormSection
         title={editingId ? "Edit Material" : "Create New Material"}
-        description={editingId ? "Update material details and pricing" : "Add a new material with pricing and initial stock information"}
+        description={
+          editingId
+            ? "Update material details and pricing"
+            : "Add a new material with pricing and initial stock information"
+        }
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <AdminInput
             label="Material Name"
             placeholder="Enter material name"
-            value={editingId ? (editForm.name || '') : name}
+            value={editingId ? editForm.name || "" : name}
             onChange={(e) => {
               if (editingId) {
-                setEditForm(prev => ({ ...prev, name: e.target.value }));
+                setEditForm((prev) => ({ ...prev, name: e.target.value }));
               } else {
                 setName(e.target.value);
               }
@@ -240,10 +258,13 @@ export default function MaterialsAdminPage() {
             <label className="flex items-center gap-3 p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
               <input
                 type="checkbox"
-                checked={editingId ? (editForm.isPackage || false) : isPackage}
+                checked={editingId ? editForm.isPackage || false : isPackage}
                 onChange={(e) => {
                   if (editingId) {
-                    setEditForm(prev => ({ ...prev, isPackage: e.target.checked }));
+                    setEditForm((prev) => ({
+                      ...prev,
+                      isPackage: e.target.checked,
+                    }));
                   } else {
                     setIsPackage(e.target.checked);
                   }
@@ -252,23 +273,25 @@ export default function MaterialsAdminPage() {
               />
               <div className="flex items-center gap-2">
                 <Package className="w-4 h-4 text-purple-600" />
-                <span className="text-sm font-medium text-gray-700">Sold as a package</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Sold as a package
+                </span>
               </div>
             </label>
           </div>
         </div>
 
-        {(editingId ? (editForm.isPackage || false) : isPackage) ? (
+        {(editingId ? editForm.isPackage || false : isPackage) ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <AdminInput
               type="number"
               label="Package Price (₱)"
               placeholder="0.00"
-              value={editingId ? (editForm.packagePrice || 0) : packagePrice}
+              value={editingId ? editForm.packagePrice || 0 : packagePrice}
               onChange={(e) => {
                 const newPrice = parseFloat(e.target.value) || 0;
                 if (editingId) {
-                  setEditForm(prev => ({ ...prev, packagePrice: newPrice }));
+                  setEditForm((prev) => ({ ...prev, packagePrice: newPrice }));
                 } else {
                   setPackagePrice(newPrice);
                 }
@@ -279,11 +302,16 @@ export default function MaterialsAdminPage() {
               type="number"
               label="Units per Package"
               placeholder="0"
-              value={editingId ? (editForm.unitsPerPackage || 0) : unitsPerPackage}
+              value={
+                editingId ? editForm.unitsPerPackage || 0 : unitsPerPackage
+              }
               onChange={(e) => {
                 const newUnits = parseInt(e.target.value) || 0;
                 if (editingId) {
-                  setEditForm(prev => ({ ...prev, unitsPerPackage: newUnits }));
+                  setEditForm((prev) => ({
+                    ...prev,
+                    unitsPerPackage: newUnits,
+                  }));
                 } else {
                   setUnitsPerPackage(newUnits);
                 }
@@ -296,7 +324,12 @@ export default function MaterialsAdminPage() {
               </label>
               <div className="px-4 py-3 bg-purple-50 border border-purple-200 rounded-lg">
                 <span className="text-lg font-semibold text-purple-800">
-                  ₱{(editingId ? (editForm.pricePerPiece || 0) : pricePerPiece).toFixed(2)} per piece
+                  ₱
+                  {(editingId
+                    ? editForm.pricePerPiece || 0
+                    : pricePerPiece
+                  ).toFixed(2)}{" "}
+                  per piece
                 </span>
               </div>
             </div>
@@ -307,11 +340,11 @@ export default function MaterialsAdminPage() {
               type="number"
               label="Price per Piece (₱)"
               placeholder="0.00"
-              value={editingId ? (editForm.pricePerPiece || 0) : pricePerPiece}
+              value={editingId ? editForm.pricePerPiece || 0 : pricePerPiece}
               onChange={(e) => {
                 const newPrice = parseFloat(e.target.value) || 0;
                 if (editingId) {
-                  setEditForm(prev => ({ ...prev, pricePerPiece: newPrice }));
+                  setEditForm((prev) => ({ ...prev, pricePerPiece: newPrice }));
                 } else {
                   setPricePerPiece(newPrice);
                 }
@@ -325,11 +358,14 @@ export default function MaterialsAdminPage() {
             type="number"
             label="Initial Stock Quantity"
             placeholder="0"
-            value={editingId ? (editForm.stockQuantity || 0) : stockQuantity}
+            value={editingId ? editForm.stockQuantity || 0 : stockQuantity}
             onChange={(e) => {
               const newQuantity = parseInt(e.target.value) || 0;
               if (editingId) {
-                setEditForm(prev => ({ ...prev, stockQuantity: newQuantity }));
+                setEditForm((prev) => ({
+                  ...prev,
+                  stockQuantity: newQuantity,
+                }));
               } else {
                 setStockQuantity(newQuantity);
               }
@@ -338,10 +374,7 @@ export default function MaterialsAdminPage() {
         </div>
 
         <AdminActions>
-          <AdminButton
-            variant="secondary"
-            onClick={resetForm}
-          >
+          <AdminButton variant="secondary" onClick={resetForm}>
             Cancel
           </AdminButton>
           <AdminButton
@@ -356,8 +389,12 @@ export default function MaterialsAdminPage() {
 
       <AdminCard>
         <div className="mb-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-2">All Materials</h3>
-          <p className="text-gray-600">Manage and edit your existing materials</p>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">
+            All Materials
+          </h3>
+          <p className="text-gray-600">
+            Manage and edit your existing materials
+          </p>
         </div>
         <AdminTable
           columns={tableColumns}

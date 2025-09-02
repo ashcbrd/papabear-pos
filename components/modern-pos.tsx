@@ -16,6 +16,7 @@ import {
   Utensils,
   Coffee,
   Zap,
+  ArrowLeft,
 } from "lucide-react";
 import OrderConfirmationDialog from "@/components/order-confirmation-dialog";
 import CustomSelect from "@/components/custom-select"; // keep if you use elsewhere
@@ -92,7 +93,6 @@ export default function ModernPOSPage() {
     loadOrders,
     createOrder,
     updateOrder,
-    recordCashInflow,
     currentDataService,
   } = useData();
 
@@ -145,10 +145,12 @@ export default function ModernPOSPage() {
 
   const loadCashDrawerBalance = useCallback(async () => {
     try {
+      console.log("Loading cash drawer balance...");
       const balanceData = await currentDataService.getCashDrawerBalance();
+      console.log("Cash drawer balance loaded:", balanceData.currentBalance);
       setCashDrawerBalance(balanceData.currentBalance);
     } catch (error) {
-      console.error("Error loading cash drawer balance:", error);
+      console.error("❌ Error loading cash drawer balance:", error);
     }
   }, [currentDataService]);
 
@@ -346,22 +348,29 @@ export default function ModernPOSPage() {
         createdOrderId = newOrder.id;
       }
 
-      // Best effort: record cash flow, don't flip main toast if this fails
+      // Record cash deposit for the payment (net amount after change)
       try {
         if (paid > 0) {
-          await recordCashInflow({
-            amount: paid,
-            type: "SALE",
-            description: `Order #${(createdOrderId || "").slice(
-              -6
-            )} - ${orderType}`,
-            paymentMethod: "CASH",
-            orderId: createdOrderId || undefined,
+          const netAmount = paid - change;  // Amount actually staying in cash drawer
+          
+          console.log("Recording cash deposit:", { 
+            paidAmount: paid,
+            changeGiven: change,
+            netAmount: netAmount,
+            orderId: createdOrderId,
+            description: `Order #${(createdOrderId || "").slice(-6)} - ${orderType}` 
           });
+          
+          await currentDataService.addCashDeposit(
+            netAmount,
+            `Order #${(createdOrderId || "").slice(-6)} - ${orderType}${change > 0 ? ` (Paid: ₱${paid.toFixed(2)}, Change: ₱${change.toFixed(2)})` : ''}`
+          );
+          
+          console.log("✅ Cash deposit recorded successfully");
         }
       } catch (err) {
-        console.error("Cash-flow record failed:", err);
-        // Optional: showToast("Order saved, but cash flow log failed.", "warning");
+        console.error("❌ Cash deposit failed:", err);
+        showToast("Order saved, but cash flow update failed.", "warning");
       }
 
       showToast(editingOrderId ? "Order updated." : "Order placed.", "success");
@@ -410,6 +419,22 @@ export default function ModernPOSPage() {
       default:
         return "Unknown";
     }
+  };
+
+  const handleCancelOrderType = () => {
+    // Clear current order items if any
+    setOrderItems([]);
+    setPayment("");
+    setSelectedProduct(null);
+    setSelectedFlavor(null);
+    setSelectedSize(null);
+    setSelectedAddons([]);
+    setEditingOrderId(null);
+    setIsOrderPanelVisible(false);
+    setShowDialog(false);
+    
+    // Reset order type to show selection screen
+    setOrderType("");
   };
 
   // Landing screen (choose order type)
@@ -709,8 +734,20 @@ export default function ModernPOSPage() {
                   ₱{cashDrawerBalance.toFixed(2)}
                 </span>
               </div>
-              <div className="badge badge-primary">
-                {formatOrderType(orderType as OrderType)}
+              <div className="flex items-center space-x-2">
+                <div className="badge badge-primary">
+                  {formatOrderType(orderType as OrderType)}
+                </div>
+                <button
+                  onClick={handleCancelOrderType}
+                  className="bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-lg flex items-center space-x-1 transition-colors group"
+                  title="Cancel and go back to order type selection"
+                >
+                  <ArrowLeft size={14} className="text-red-600 group-hover:text-red-700" />
+                  <span className="text-xs font-semibold text-red-600 group-hover:text-red-700">
+                    Cancel
+                  </span>
+                </button>
               </div>
               <button
                 onClick={() => setIsOrderPanelVisible(true)}

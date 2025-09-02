@@ -224,6 +224,8 @@ class SQLiteService {
         amount REAL NOT NULL CHECK(amount > 0),
         category TEXT NOT NULL,
         description TEXT NOT NULL,
+        orderId TEXT,
+        paymentMethod TEXT,
         itemsPurchased TEXT,
         createdAt TEXT NOT NULL DEFAULT (datetime('now')),
         createdBy TEXT NOT NULL DEFAULT 'admin'
@@ -279,6 +281,27 @@ class SQLiteService {
         }
       } catch (error) {
         console.log('⚠️ Migration 1 failed or not needed:', error);
+      }
+      
+      // Migration 2: Add orderId and paymentMethod columns to cash_flow_transactions table
+      try {
+        const tableInfo = await this.db.query("PRAGMA table_info(cash_flow_transactions)");
+        const hasOrderId = tableInfo.values?.some((col: any) => col.name === 'orderId');
+        const hasPaymentMethod = tableInfo.values?.some((col: any) => col.name === 'paymentMethod');
+        
+        if (!hasOrderId) {
+          console.log('Adding orderId column to cash_flow_transactions table...');
+          await this.db.execute('ALTER TABLE cash_flow_transactions ADD COLUMN orderId TEXT');
+          console.log('✅ Added orderId column to cash_flow_transactions table');
+        }
+        
+        if (!hasPaymentMethod) {
+          console.log('Adding paymentMethod column to cash_flow_transactions table...');
+          await this.db.execute('ALTER TABLE cash_flow_transactions ADD COLUMN paymentMethod TEXT');
+          console.log('✅ Added paymentMethod column to cash_flow_transactions table');
+        }
+      } catch (error) {
+        console.log('⚠️ Migration 2 failed or not needed:', error);
       }
       
       console.log('✅ Database migrations completed');
@@ -625,6 +648,7 @@ class SQLiteService {
     if (!this.db) throw new Error('Database not initialized');
     
     try {
+      console.log(`📦 updateStock called:`, { itemType, itemId, quantity });
       const columnName = `${itemType}Id`;
       
       // First try to update existing record
@@ -632,6 +656,8 @@ class SQLiteService {
         `UPDATE stock SET quantity = ?, updatedAt = datetime('now') WHERE ${columnName} = ?`,
         [quantity, itemId]
       );
+      
+      console.log(`📝 Update attempt result:`, { changes: updateResult.changes });
       
       // If no rows were affected, insert new record
       if ((updateResult.changes ?? 0) === 0) {
@@ -645,16 +671,22 @@ class SQLiteService {
           updatedAt: 'datetime("now")'
         };
         
+        console.log(`➕ Inserting new stock record:`, insertData);
+        
         await this.db.run(
           `INSERT INTO stock (id, addonId, ingredientId, materialId, quantity, updatedAt) 
            VALUES (?, ?, ?, ?, ?, datetime('now'))`,
           [insertData.id, insertData.addonId, insertData.ingredientId, insertData.materialId, insertData.quantity]
         );
+        
+        console.log(`✅ Stock record inserted successfully`);
+      } else {
+        console.log(`✅ Stock record updated successfully`);
       }
       
       return true;
     } catch (error) {
-      console.error('Error updating stock:', error);
+      console.error('❌ Error updating stock:', error);
       return false;
     }
   }
