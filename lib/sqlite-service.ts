@@ -873,21 +873,156 @@ class SQLiteService {
     }
   }
 
+  // Stock Deduction Methods
+  async deductStock(stockDeductions: Array<{type: string, id: string, quantityUsed: number}>): Promise<void> {
+    if (!stockDeductions.length) return;
+    
+    // Group deductions by item ID to handle multiple uses of same ingredient/material
+    const deductionMap = new Map();
+    
+    for (const deduction of stockDeductions) {
+      const key = `${deduction.type}-${deduction.id}`;
+      const existing = deductionMap.get(key);
+      if (existing) {
+        existing.quantityUsed += deduction.quantityUsed;
+      } else {
+        deductionMap.set(key, { ...deduction });
+      }
+    }
+    
+    // Apply the deductions
+    for (const [key, deduction] of deductionMap) {
+      await this.updateStockQuantity(deduction.type, deduction.id, -deduction.quantityUsed);
+    }
+  }
+
+  async updateStockQuantity(type: string, itemId: string, quantityChange: number): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    console.log(`Stock Update: ${type} ID ${itemId} - Change: ${quantityChange}`);
+    
+    try {
+      // Find the stock record for this item based on type
+      let stockQuery = '';
+      switch (type) {
+        case 'ingredient':
+          stockQuery = 'SELECT * FROM stock WHERE ingredientId = ?';
+          break;
+        case 'material':
+          stockQuery = 'SELECT * FROM stock WHERE materialId = ?';
+          break;
+        case 'addon':
+          stockQuery = 'SELECT * FROM stock WHERE addonId = ?';
+          break;
+        default:
+          console.warn(`Unknown stock type: ${type}`);
+          return;
+      }
+      
+      const result = await this.db.query(stockQuery, [itemId]);
+      const stockRecord = result.values?.[0];
+      
+      if (stockRecord) {
+        // Update the quantity (subtract for usage, add for restocking)
+        const newQuantity = Math.max(0, stockRecord.quantity + quantityChange);
+        
+        await this.db.run(
+          'UPDATE stock SET quantity = ?, updatedAt = datetime("now") WHERE id = ?',
+          [newQuantity, stockRecord.id]
+        );
+        
+        console.log(`Updated ${type} ${itemId}: ${stockRecord.quantity} -> ${newQuantity}`);
+      } else {
+        console.warn(`Stock record not found for ${type} ${itemId}`);
+      }
+    } catch (error) {
+      console.error(`Error updating stock for ${type} ${itemId}:`, error);
+    }
+  }
+
   // Order Methods
   async createOrder(orderData: any): Promise<string | null> {
     if (!this.db) throw new Error('Database not initialized');
     
     try {
       const id = this.generateUUID();
+      
+      // First, calculate and apply stock deductions
+      const stockDeductions = await this.calculateStockDeductions(orderData.items || []);
+      await this.deductStock(stockDeductions);
+      
+      // Then create the order
       await this.db.run(
         'INSERT INTO orders (id, total, paid, change, orderType, orderStatus, items) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [id, orderData.total, orderData.paid, orderData.change, orderData.orderType, orderData.orderStatus || 'QUEUING', JSON.stringify(orderData.items || [])]
       );
+      
+      console.log('Order created successfully with stock deductions applied');
       return id;
     } catch (error) {
       console.error('Error creating order:', error);
       return null;
     }
+  }
+
+  async calculateStockDeductions(items: any[]): Promise<Array<{type: string, id: string, quantityUsed: number}>> {
+    const stockDeductions = [];
+    
+    for (const item of items) {
+      const size = item.size;
+      const quantity = item.quantity;
+      
+      // Get ingredients needed for this size
+      if (size?.ingredients) {
+        for (const sizeIngredient of size.ingredients) {
+          const ingredientId = sizeIngredient.ingredient?.id || sizeIngredient.ingredientId;
+          const quantityUsed = sizeIngredient.quantityUsed * quantity;
+          
+          if (ingredientId && quantityUsed > 0) {
+            stockDeductions.push({
+              type: 'ingredient',
+              id: ingredientId,
+              quantityUsed
+            });
+          }
+        }
+      }
+      
+      // Get materials needed for this size
+      if (size?.materials) {
+        for (const sizeMaterial of size.materials) {
+          const materialId = sizeMaterial.material?.id || sizeMaterial.materialId;
+          const quantityUsed = sizeMaterial.quantityUsed * quantity;
+          
+          if (materialId && quantityUsed > 0) {
+            stockDeductions.push({
+              type: 'material',
+              id: materialId,
+              quantityUsed
+            });
+          }
+        }
+      }
+      
+      // Handle addons stock deduction
+      if (item.addons) {
+        for (const addon of item.addons) {
+          const addonId = addon.addon?.id || addon.id;
+          const addonQuantity = addon.quantity;
+          
+          if (addonId && addonQuantity > 0) {
+            stockDeductions.push({
+              type: 'addon',
+              id: addonId,
+              quantityUsed: addonQuantity
+            });
+          }
+        }
+      }
+    }
+    
+    console.log(`Calculated ${stockDeductions.length} stock deductions for order`);
+    return stockDeductions;
   }
 
   async getAllOrders(): Promise<any[]> {
