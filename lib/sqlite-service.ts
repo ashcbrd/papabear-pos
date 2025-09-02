@@ -933,6 +933,45 @@ class SQLiteService {
       return false;
     }
   }
+
+  async recordCashFlowTransaction(transaction: {
+    id: string;
+    type: string;
+    amount: number;
+    category: string;
+    orderId?: string;
+    description: string;
+    paymentMethod?: string;
+    itemsPurchased?: string;
+    createdAt: string;
+    createdBy: string;
+  }): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      await this.db.run(
+        `INSERT INTO cash_flow_transactions 
+         (id, type, amount, category, orderId, description, paymentMethod, itemsPurchased, createdAt, createdBy) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          transaction.id,
+          transaction.type,
+          transaction.amount,
+          transaction.category,
+          transaction.orderId || null,
+          transaction.description,
+          transaction.paymentMethod || null,
+          transaction.itemsPurchased || null,
+          transaction.createdAt,
+          transaction.createdBy
+        ]
+      );
+      return true;
+    } catch (error) {
+      console.error('Error recording cash flow transaction:', error);
+      return false;
+    }
+  }
 }
 
 export const sqliteService = new SQLiteService();

@@ -512,7 +512,11 @@ class AndroidDatabaseService implements DatabaseService {
           }
         }
 
-        return { id, ...addon };
+        return { 
+          id, 
+          ...addon,
+          stock: { quantity: addon.stockQuantity || 0 }
+        };
       } catch (error) {
         console.error("Error updating addon:", error);
         throw error;
@@ -683,7 +687,12 @@ class AndroidDatabaseService implements DatabaseService {
           }
         }
 
-        return { id, ...ingredient, pricePerUnit };
+        return { 
+          id, 
+          ...ingredient, 
+          pricePerUnit,
+          stock: { quantity: ingredient.stockQuantity || 0 }
+        };
       } catch (error) {
         console.error("Error updating ingredient:", error);
         throw error;
@@ -857,7 +866,12 @@ class AndroidDatabaseService implements DatabaseService {
           }
         }
 
-        return { id, ...material, pricePerPiece };
+        return { 
+          id, 
+          ...material, 
+          pricePerPiece,
+          stock: { quantity: material.stockQuantity || 0 }
+        };
       } catch (error) {
         console.error("Error updating material:", error);
         throw error;
@@ -1640,6 +1654,102 @@ class AndroidDatabaseService implements DatabaseService {
     } catch (error) {
       console.error('❌ AndroidDatabaseService: Error setting cash drawer balance:', error);
       DebugLogger.log('SET_CASH_DRAWER_BALANCE', { newBalance, reason }, null, error);
+      throw error;
+    }
+  }
+
+  async recordCashInflow(inflowData: {
+    amount: number;
+    type: 'ORDER_PAYMENT' | 'CASH_DEPOSIT' | 'OTHER_INCOME' | 'SALE';
+    orderId?: string;
+    description: string;
+    paymentMethod?: string;
+  }) {
+    if (!this.isInitialized) await this.initializeDatabase();
+
+    console.log('🔄 AndroidDatabaseService: Recording cash inflow:', inflowData);
+
+    try {
+      const transaction = {
+        id: this.generateId(),
+        type: 'INFLOW',
+        amount: inflowData.amount,
+        category: inflowData.type,
+        orderId: inflowData.orderId,
+        description: inflowData.description,
+        paymentMethod: inflowData.paymentMethod || 'CASH',
+        createdAt: new Date().toISOString(),
+        createdBy: 'System'
+      };
+
+      if (Capacitor.isNativePlatform()) {
+        await sqliteService.recordCashFlowTransaction(transaction);
+        console.log('✅ Cash inflow recorded in SQLite');
+      } else {
+        // Fallback to localStorage
+        const transactions = this.getFromWebStorage('papabear_cash_flow_transactions');
+        transactions.push(transaction);
+        this.setToWebStorage('papabear_cash_flow_transactions', transactions);
+        
+        // Update cash drawer balance for cash payments
+        if (inflowData.paymentMethod === 'CASH' || !inflowData.paymentMethod) {
+          const balanceData = this.getFromWebStorage('papabear_cash_drawer_balance');
+          balanceData.currentBalance += inflowData.amount;
+          this.setToWebStorage('papabear_cash_drawer_balance', balanceData);
+        }
+        console.log('✅ Cash inflow recorded in localStorage');
+      }
+
+      return transaction;
+    } catch (error) {
+      console.error('❌ AndroidDatabaseService: Error recording cash inflow:', error);
+      throw error;
+    }
+  }
+
+  async recordCashOutflow(outflowData: {
+    amount: number;
+    type: 'STOCK_PURCHASE' | 'EXPENSE' | 'WITHDRAWAL' | 'REFUND';
+    description: string;
+    itemsPurchased?: string;
+    orderId?: string;
+  }) {
+    if (!this.isInitialized) await this.initializeDatabase();
+
+    console.log('🔄 AndroidDatabaseService: Recording cash outflow:', outflowData);
+
+    try {
+      const transaction = {
+        id: this.generateId(),
+        type: 'OUTFLOW',
+        amount: -Math.abs(outflowData.amount), // Ensure negative
+        category: outflowData.type,
+        orderId: outflowData.orderId,
+        description: outflowData.description,
+        itemsPurchased: outflowData.itemsPurchased,
+        createdAt: new Date().toISOString(),
+        createdBy: 'Admin'
+      };
+
+      if (Capacitor.isNativePlatform()) {
+        await sqliteService.recordCashFlowTransaction(transaction);
+        console.log('✅ Cash outflow recorded in SQLite');
+      } else {
+        // Fallback to localStorage
+        const transactions = this.getFromWebStorage('papabear_cash_flow_transactions');
+        transactions.push(transaction);
+        this.setToWebStorage('papabear_cash_flow_transactions', transactions);
+        
+        // Update cash drawer balance
+        const balanceData = this.getFromWebStorage('papabear_cash_drawer_balance');
+        balanceData.currentBalance -= Math.abs(outflowData.amount);
+        this.setToWebStorage('papabear_cash_drawer_balance', balanceData);
+        console.log('✅ Cash outflow recorded in localStorage');
+      }
+
+      return transaction;
+    } catch (error) {
+      console.error('❌ AndroidDatabaseService: Error recording cash outflow:', error);
       throw error;
     }
   }
