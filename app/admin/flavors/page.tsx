@@ -35,7 +35,7 @@ const PAPA_BEAR_FLAVORS = [
 ];
 
 export default function FlavorsAdminPage() {
-  const { flavors, createFlavor, updateFlavor, deleteFlavor } = useData();
+  const { flavors, createFlavor, updateFlavor, deleteFlavor, importPapaBearFlavors, loadFlavors } = useData();
   
   const [name, setName] = useState("");
   const [editingFlavorId, setEditingFlavorId] = useState<string | null>(null);
@@ -47,16 +47,21 @@ export default function FlavorsAdminPage() {
   };
 
   const handleSave = async () => {
+    if (!name.trim()) {
+      alert("Please enter a flavor name");
+      return;
+    }
+
     try {
       if (editingFlavorId) {
-        await updateFlavor(editingFlavorId, { name });
+        await updateFlavor(editingFlavorId, { name: name.trim() });
       } else {
-        await createFlavor({ name });
+        await createFlavor({ name: name.trim() });
       }
       resetForm();
     } catch (error) {
       console.error("Save failed:", error);
-      alert("Save failed");
+      alert(`Save failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -65,32 +70,35 @@ export default function FlavorsAdminPage() {
     
     setIsImporting(true);
     try {
-      // Delete all existing flavors
-      for (const flavor of flavors) {
-        await deleteFlavor(flavor.id);
-      }
+      // Use the improved bulk import method
+      const importedCount = await importPapaBearFlavors();
       
-      // Add all Papa Bear flavors
-      for (const flavorName of PAPA_BEAR_FLAVORS) {
-        await createFlavor({ name: flavorName });
-      }
+      // Reload flavors to update the UI
+      await loadFlavors();
       
-      alert(`Successfully imported ${PAPA_BEAR_FLAVORS.length} flavors!`);
+      alert(`Successfully imported ${importedCount} flavors!`);
     } catch (error) {
       console.error("Bulk import failed:", error);
-      alert("Bulk import failed. Please try again.");
+      alert(`Bulk import failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsImporting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this flavor?")) return;
+    const flavorToDelete = flavors.find(f => f.id === id);
+    if (!flavorToDelete) {
+      alert("Flavor not found");
+      return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete "${flavorToDelete.name}"?`)) return;
+    
     try {
       await deleteFlavor(id);
     } catch (error) {
-      console.error("Delete failed:", error);
-      alert("Delete failed");
+      console.error("Failed to delete flavor:", error);
+      alert("Failed to delete flavor");
     }
   };
 

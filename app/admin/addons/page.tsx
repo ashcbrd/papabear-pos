@@ -23,7 +23,18 @@ export default function AddonsAdminPage() {
   const [editForm, setEditForm] = useState<Partial<AddonInput>>({});
 
   const isFormValid = () => {
+    if (editingId) {
+      return (editForm.name || '').trim() !== "" && (editForm.price || 0) > 0;
+    }
     return name.trim() !== "" && price > 0;
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setEditForm({});
+    setName("");
+    setPrice(0);
+    setStockQuantity(0);
   };
 
   const handleCreateAddon = async () => {
@@ -136,51 +147,67 @@ export default function AddonsAdminPage() {
       />
 
       <AdminFormSection
-        title="Create New Add-on"
-        description="Add new optional items that customers can add to their orders"
+        title={editingId ? "Edit Add-on" : "Create New Add-on"}
+        description={editingId ? "Update add-on details" : "Add new optional items that customers can add to their orders"}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <AdminInput
             label="Add-on Name"
             placeholder="Enter add-on name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={editingId ? (editForm.name || '') : name}
+            onChange={(e) => {
+              if (editingId) {
+                setEditForm(prev => ({ ...prev, name: e.target.value }));
+              } else {
+                setName(e.target.value);
+              }
+            }}
           />
 
           <AdminInput
             type="number"
             label="Price (₱)"
             placeholder="0.00"
-            value={price}
-            onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+            value={editingId ? (editForm.price || 0) : price}
+            onChange={(e) => {
+              const newPrice = parseFloat(e.target.value) || 0;
+              if (editingId) {
+                setEditForm(prev => ({ ...prev, price: newPrice }));
+              } else {
+                setPrice(newPrice);
+              }
+            }}
           />
 
           <AdminInput
             type="number"
             label="Initial Stock Quantity"
             placeholder="0"
-            value={stockQuantity}
-            onChange={(e) => setStockQuantity(parseInt(e.target.value) || 0)}
+            value={editingId ? (editForm.stockQuantity || 0) : stockQuantity}
+            onChange={(e) => {
+              const newQuantity = parseInt(e.target.value) || 0;
+              if (editingId) {
+                setEditForm(prev => ({ ...prev, stockQuantity: newQuantity }));
+              } else {
+                setStockQuantity(newQuantity);
+              }
+            }}
           />
         </div>
 
         <AdminActions>
           <AdminButton
             variant="secondary"
-            onClick={() => {
-              setName("");
-              setPrice(0);
-              setStockQuantity(0);
-            }}
+            onClick={resetForm}
           >
             Cancel
           </AdminButton>
           <AdminButton
             variant="primary"
-            onClick={handleCreateAddon}
+            onClick={editingId ? saveEdit : handleCreateAddon}
             disabled={!isFormValid()}
           >
-            Create Add-on
+            {editingId ? "Update Add-on" : "Create Add-on"}
           </AdminButton>
         </AdminActions>
       </AdminFormSection>

@@ -422,7 +422,7 @@ export default function CashFlowManager() {
 
       {/* Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div
             onClick={openDrawerModal}
             className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200 cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200 group"
@@ -440,34 +440,6 @@ export default function CashFlowManager() {
                 </p>
               </div>
               <Wallet className="w-8 h-8 text-blue-600 group-hover:text-blue-700" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-600 font-medium">
-                  Total Inflow
-                </p>
-                <p className="text-2xl font-bold text-green-900">
-                  {formatCurrency(summary.totalInflow)}
-                </p>
-              </div>
-              <TrendingUp className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-6 border border-red-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-red-600 font-medium">
-                  Total Outflow
-                </p>
-                <p className="text-2xl font-bold text-red-900">
-                  {formatCurrency(summary.totalOutflow)}
-                </p>
-              </div>
-              <TrendingDown className="w-8 h-8 text-red-600" />
             </div>
           </div>
 
@@ -500,6 +472,34 @@ export default function CashFlowManager() {
                   summary.netFlow >= 0 ? "text-emerald-600" : "text-red-600"
                 }`}
               />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600 font-medium">
+                  Total Inflow
+                </p>
+                <p className="text-2xl font-bold text-green-900">
+                  {formatCurrency(summary.totalInflow)}
+                </p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-6 border border-red-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-red-600 font-medium">
+                  Total Outflow
+                </p>
+                <p className="text-2xl font-bold text-red-900">
+                  {formatCurrency(summary.totalOutflow)}
+                </p>
+              </div>
+              <TrendingDown className="w-8 h-8 text-red-600" />
             </div>
           </div>
         </div>

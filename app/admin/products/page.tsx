@@ -1,7 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Category, Ingredient, Material } from "@prisma/client";
+// Define types locally instead of importing from Prisma client
+type Category = "Meals" | "ColdBeverages" | "HotBeverages";
+
+interface Ingredient {
+  id: string;
+  name: string;
+  measurementUnit: string;
+  unitsPerPurchase?: number;
+  pricePerPurchase: number;
+  pricePerUnit: number;
+}
+
+interface Material {
+  id: string;
+  name: string;
+  pricePerPiece: number;
+  isPackage: boolean;
+  packagePrice?: number;
+  unitsPerPackage?: number;
+}
 import { Pencil, Trash, PlusCircle, XCircle, Package, Plus } from "lucide-react";
 import CustomSelect from "@/components/custom-select";
 import { useData } from "@/lib/data-context";
@@ -149,11 +168,11 @@ export default function ProductsAdminPage() {
       (p.sizes || []).map((s) => ({
         name: s.name,
         price: s.price || 0,
-        materials: (s.materials || []).map((m) => ({
+        materials: (s.materials || []).map((m: any) => ({
           id: m.material?.id || m.id,
           quantity: m.quantityUsed || m.quantity || 0,
         })),
-        ingredients: (s.ingredients || []).map((i) => ({
+        ingredients: (s.ingredients || []).map((i: any) => ({
           id: i.ingredient?.id || i.id,
           quantity: i.quantityUsed || i.quantity || 0,
         })),
@@ -414,7 +433,7 @@ function FlavorEditor({
         <AdminSelect
           label="Flavor"
           value={flavor.name}
-          onChange={(e) => update({ ...flavor, name: e.target.value })}
+          onChange={(e) => update({ ...flavor, name: e.target.value as string })}
           options={dynamicFlavors
             .filter(
               (dynamicFlavor) =>
@@ -548,7 +567,7 @@ function NestedSelectors<T extends { id: string; name: string; measurementUnit?:
           value=""
           onChange={(e) => {
             if (e.target.value) {
-              onChange([...items, { id: e.target.value, quantity: 1 }]);
+              onChange([...items, { id: e.target.value as string, quantity: 1 }]);
             }
           }}
           options={all

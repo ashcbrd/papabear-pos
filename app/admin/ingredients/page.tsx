@@ -48,6 +48,8 @@ export default function IngredientsAdminPage() {
   }, [pricePerPurchase, unitsPerPurchase]);
 
   const resetForm = () => {
+    setEditingId(null);
+    setEditForm({});
     setName("");
     setMeasurementUnit("piece");
     setUnitsPerPurchase(1);
@@ -57,6 +59,9 @@ export default function IngredientsAdminPage() {
   };
 
   const isFormValid = () => {
+    if (editingId) {
+      return (editForm.name || '').trim() !== "" && (editForm.pricePerPurchase || 0) > 0 && (editForm.unitsPerPurchase || 0) > 0;
+    }
     return name.trim() !== "" && pricePerPurchase > 0 && unitsPerPurchase > 0;
   };
 
@@ -213,21 +218,33 @@ export default function IngredientsAdminPage() {
       />
 
       <AdminFormSection
-        title="Create New Ingredient"
-        description="Add a new ingredient with pricing and initial stock information"
+        title={editingId ? "Edit Ingredient" : "Create New Ingredient"}
+        description={editingId ? "Update ingredient details and pricing" : "Add a new ingredient with pricing and initial stock information"}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <AdminInput
             label="Ingredient Name"
             placeholder="Enter ingredient name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={editingId ? (editForm.name || '') : name}
+            onChange={(e) => {
+              if (editingId) {
+                setEditForm(prev => ({ ...prev, name: e.target.value }));
+              } else {
+                setName(e.target.value);
+              }
+            }}
           />
 
           <AdminSelect
             label="Measurement Unit"
-            value={measurementUnit}
-            onChange={(e) => setMeasurementUnit(e.target.value)}
+            value={editingId ? (editForm.measurementUnit || 'piece') : measurementUnit}
+            onChange={(e) => {
+              if (editingId) {
+                setEditForm(prev => ({ ...prev, measurementUnit: e.target.value as string }));
+              } else {
+                setMeasurementUnit(e.target.value as string);
+              }
+            }}
             options={measurementUnits.map(unit => ({ label: unit, value: unit }))}
           />
 
@@ -235,24 +252,45 @@ export default function IngredientsAdminPage() {
             type="number"
             label="Units per Purchase"
             placeholder="1"
-            value={unitsPerPurchase}
-            onChange={(e) => setUnitsPerPurchase(parseFloat(e.target.value) || 1)}
+            value={editingId ? (editForm.unitsPerPurchase || 1) : unitsPerPurchase}
+            onChange={(e) => {
+              const newUnits = parseFloat(e.target.value) || 1;
+              if (editingId) {
+                setEditForm(prev => ({ ...prev, unitsPerPurchase: newUnits }));
+              } else {
+                setUnitsPerPurchase(newUnits);
+              }
+            }}
           />
 
           <AdminInput
             type="number"
             label="Price per Purchase (₱)"
             placeholder="0.00"
-            value={pricePerPurchase}
-            onChange={(e) => setPricePerPurchase(parseFloat(e.target.value) || 0)}
+            value={editingId ? (editForm.pricePerPurchase || 0) : pricePerPurchase}
+            onChange={(e) => {
+              const newPrice = parseFloat(e.target.value) || 0;
+              if (editingId) {
+                setEditForm(prev => ({ ...prev, pricePerPurchase: newPrice }));
+              } else {
+                setPricePerPurchase(newPrice);
+              }
+            }}
           />
 
           <AdminInput
             type="number"
             label="Initial Stock Quantity"
             placeholder="0"
-            value={stockQuantity}
-            onChange={(e) => setStockQuantity(parseInt(e.target.value) || 0)}
+            value={editingId ? (editForm.stockQuantity || 0) : stockQuantity}
+            onChange={(e) => {
+              const newQuantity = parseInt(e.target.value) || 0;
+              if (editingId) {
+                setEditForm(prev => ({ ...prev, stockQuantity: newQuantity }));
+              } else {
+                setStockQuantity(newQuantity);
+              }
+            }}
           />
 
           <div className="flex flex-col">
@@ -261,7 +299,7 @@ export default function IngredientsAdminPage() {
             </label>
             <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
               <span className="text-lg font-semibold text-green-800">
-                ₱{pricePerUnit.toFixed(2)} per {measurementUnit}
+                ₱{(editingId ? (editForm.pricePerUnit || 0) : pricePerUnit).toFixed(2)} per {editingId ? (editForm.measurementUnit || 'piece') : measurementUnit}
               </span>
             </div>
           </div>
@@ -276,10 +314,10 @@ export default function IngredientsAdminPage() {
           </AdminButton>
           <AdminButton
             variant="primary"
-            onClick={handleCreateIngredient}
+            onClick={editingId ? saveEdit : handleCreateIngredient}
             disabled={!isFormValid()}
           >
-            Create Ingredient
+            {editingId ? "Update Ingredient" : "Create Ingredient"}
           </AdminButton>
         </AdminActions>
       </AdminFormSection>

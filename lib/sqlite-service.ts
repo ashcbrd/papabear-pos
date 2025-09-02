@@ -217,6 +217,18 @@ class SQLiteService {
         createdAt TEXT NOT NULL DEFAULT (datetime('now'))
       );`,
 
+      // Cash flow transactions table
+      `CREATE TABLE IF NOT EXISTS cash_flow_transactions (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL CHECK(type IN ('INFLOW', 'OUTFLOW')),
+        amount REAL NOT NULL CHECK(amount > 0),
+        category TEXT NOT NULL,
+        description TEXT NOT NULL,
+        itemsPurchased TEXT,
+        createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+        createdBy TEXT NOT NULL DEFAULT 'admin'
+      );`,
+
       // Create indexes for better performance
       `CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);`,
       `CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);`,
@@ -229,7 +241,9 @@ class SQLiteService {
       `CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(createdAt);`,
       `CREATE INDEX IF NOT EXISTS idx_stock_addon ON stock(addonId);`,
       `CREATE INDEX IF NOT EXISTS idx_stock_ingredient ON stock(ingredientId);`,
-      `CREATE INDEX IF NOT EXISTS idx_stock_material ON stock(materialId);`
+      `CREATE INDEX IF NOT EXISTS idx_stock_material ON stock(materialId);`,
+      `CREATE INDEX IF NOT EXISTS idx_cash_flow_date ON cash_flow_transactions(createdAt);`,
+      `CREATE INDEX IF NOT EXISTS idx_cash_flow_type ON cash_flow_transactions(type);`
     ];
 
     for (const statement of statements) {
@@ -242,6 +256,36 @@ class SQLiteService {
     }
     
     console.log('SQLite tables created successfully with duplicate prevention');
+    
+    // Run migrations to fix schema issues
+    await this.runMigrations();
+  }
+
+  private async runMigrations(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      console.log('Running database migrations...');
+      
+      // Migration 1: Add createdAt column to flavors table if it doesn't exist
+      try {
+        const tableInfo = await this.db.query("PRAGMA table_info(flavors)");
+        const hasCreatedAt = tableInfo.values?.some((col: any) => col.name === 'createdAt');
+        
+        if (!hasCreatedAt) {
+          console.log('Adding createdAt column to flavors table...');
+          await this.db.execute('ALTER TABLE flavors ADD COLUMN createdAt TEXT NOT NULL DEFAULT (datetime("now"))');
+          console.log('✅ Added createdAt column to flavors table');
+        }
+      } catch (error) {
+        console.log('⚠️ Migration 1 failed or not needed:', error);
+      }
+      
+      console.log('✅ Database migrations completed');
+    } catch (error) {
+      console.error('❌ Database migrations failed:', error);
+      // Don't throw - let app continue with existing schema
+    }
   }
 
   private async removeDuplicates(): Promise<void> {
@@ -325,40 +369,48 @@ class SQLiteService {
     if (!this.db) throw new Error('Database not initialized');
 
     try {
-      // Check if flavors table has data
-      const flavorCheck = await this.db.query('SELECT COUNT(*) as count FROM flavors');
-      if (flavorCheck.values && flavorCheck.values[0].count === 0) {
-        // Insert Papa Bear flavors with IGNORE to prevent duplicates
-        const flavors = [
-          "Americano", "Cinnamon", "Salted Caramel", "Creamy Vanilla", "Mocha", "Honeycomb Latte", 
-          "Tiramisu", "Caramel Macchiato", "Spanish Latte", "Matcha Latte", "Matcha Caramel", 
-          "Mango Matcha Latte", "Strawberry Matcha Latte", "Blueberry Matcha Latte", "Coffee Float", 
-          "Strawberry Float", "Blueberry Float", "Sprite Float", "Coke Float", "Matcha Float", 
-          "Kiwi Will Rock You", "Blueberry Licious", "Tipsy Strawberry", "Edi Wow Grape", 
-          "Mango Tango", "Honey Orange Ginger", "Okinawa", "Taro", "Wintermelon", "Red Velvet", 
-          "Cookies and Cream", "Chocolate", "Mango Cheesecake", "Matcha", "Minty Matcha", 
-          "Choco Mint", "Blueberry Graham", "Mango Graham", "Avocado Graham", "Cookies and Cream Graham", 
-          "Dark Chocolate S'mores", "Matcha S'mores", "Red Velvet S'mores", "Caramel Macchiato S'mores", 
-          "Cookies and Cream S'mores", "Lemonade", "Tropical Berry Lemon", "Kiwi Lemonade", 
-          "Honey Lemon", "Hot Choco"
-        ];
-
-        for (const flavor of flavors) {
-          const id = this.generateUUID();
-          try {
-            await this.db.run(
-              'INSERT OR IGNORE INTO flavors (id, name) VALUES (?, ?)',
-              [id, flavor]
-            );
-          } catch (error) {
-            // Skip duplicates silently
-            console.warn(`Flavor "${flavor}" already exists, skipping`);
-          }
-        }
-        console.log('Seeded flavors data');
-      }
+      // NOTE: Removed automatic flavor seeding to prevent hardcoded flavors from reappearing
+      // Flavors should only be created through the admin interface or manual import
+      console.log('Database seeding completed (flavors not auto-seeded)');
     } catch (error) {
       console.error('Error seeding data:', error);
+    }
+  }
+
+  // Manual method to seed Papa Bear flavors - only when explicitly requested
+  async seedPapaBearFlavors(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const flavors = [
+        "Americano", "Cinnamon", "Salted Caramel", "Creamy Vanilla", "Mocha", "Honeycomb Latte", 
+        "Tiramisu", "Caramel Macchiato", "Spanish Latte", "Matcha Latte", "Matcha Caramel", 
+        "Mango Matcha Latte", "Strawberry Matcha Latte", "Blueberry Matcha Latte", "Coffee Float", 
+        "Strawberry Float", "Blueberry Float", "Sprite Float", "Coke Float", "Matcha Float", 
+        "Kiwi Will Rock You", "Blueberry Licious", "Tipsy Strawberry", "Edi Wow Grape", 
+        "Mango Tango", "Honey Orange Ginger", "Okinawa", "Taro", "Wintermelon", "Red Velvet", 
+        "Cookies and Cream", "Chocolate", "Mango Cheesecake", "Matcha", "Minty Matcha", 
+        "Choco Mint", "Blueberry Graham", "Mango Graham", "Avocado Graham", "Cookies and Cream Graham", 
+        "Dark Chocolate S'mores", "Matcha S'mores", "Red Velvet S'mores", "Caramel Macchiato S'mores", 
+        "Cookies and Cream S'mores", "Lemonade", "Tropical Berry Lemon", "Kiwi Lemonade", 
+        "Honey Lemon", "Hot Choco"
+      ];
+
+      for (const flavor of flavors) {
+        const id = this.generateUUID();
+        try {
+          await this.db.run(
+            'INSERT OR IGNORE INTO flavors (id, name) VALUES (?, ?)',
+            [id, flavor]
+          );
+        } catch (error) {
+          console.warn(`Flavor "${flavor}" already exists, skipping`);
+        }
+      }
+      console.log('Papa Bear flavors seeded manually');
+    } catch (error) {
+      console.error('Error seeding Papa Bear flavors:', error);
+      throw error;
     }
   }
 
@@ -503,7 +555,14 @@ class SQLiteService {
     if (!this.db) throw new Error('Database not initialized');
     
     try {
-      const result = await this.db.query('SELECT * FROM materials ORDER BY name');
+      const result = await this.db.query(`
+        SELECT 
+          m.*,
+          COALESCE(s.quantity, 0) as stockQuantity
+        FROM materials m 
+        LEFT JOIN stock s ON s.materialId = m.id 
+        ORDER BY m.name
+      `);
       return result.values || [];
     } catch (error) {
       console.error('Error getting materials:', error);
@@ -515,7 +574,14 @@ class SQLiteService {
     if (!this.db) throw new Error('Database not initialized');
     
     try {
-      const result = await this.db.query('SELECT * FROM ingredients ORDER BY name');
+      const result = await this.db.query(`
+        SELECT 
+          i.*,
+          COALESCE(s.quantity, 0) as stockQuantity
+        FROM ingredients i 
+        LEFT JOIN stock s ON s.ingredientId = i.id 
+        ORDER BY i.name
+      `);
       return result.values || [];
     } catch (error) {
       console.error('Error getting ingredients:', error);
@@ -527,7 +593,14 @@ class SQLiteService {
     if (!this.db) throw new Error('Database not initialized');
     
     try {
-      const result = await this.db.query('SELECT * FROM addons ORDER BY name');
+      const result = await this.db.query(`
+        SELECT 
+          a.*,
+          COALESCE(s.quantity, 0) as stockQuantity
+        FROM addons a 
+        LEFT JOIN stock s ON s.addonId = a.id 
+        ORDER BY a.name
+      `);
       return result.values || [];
     } catch (error) {
       console.error('Error getting addons:', error);
@@ -561,7 +634,7 @@ class SQLiteService {
       );
       
       // If no rows were affected, insert new record
-      if (updateResult.changes === 0) {
+      if ((updateResult.changes ?? 0) === 0) {
         const id = this.generateUUID();
         const insertData = {
           id,
@@ -603,6 +676,262 @@ class SQLiteService {
   // Manual duplicate cleanup method for external use
   async cleanupDuplicates(): Promise<void> {
     await this.removeDuplicates();
+  }
+
+  // Cash Flow Methods
+  async createCashFlowTransaction(type: 'INFLOW' | 'OUTFLOW', amount: number, category: string, description: string, itemsPurchased?: string): Promise<string | null> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const id = this.generateUUID();
+      await this.db.run(
+        'INSERT INTO cash_flow_transactions (id, type, amount, category, description, itemsPurchased) VALUES (?, ?, ?, ?, ?, ?)',
+        [id, type, amount, category, description, itemsPurchased || null]
+      );
+      return id;
+    } catch (error) {
+      console.error('Error creating cash flow transaction:', error);
+      return null;
+    }
+  }
+
+  async getAllCashFlowTransactions(): Promise<any[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.query('SELECT * FROM cash_flow_transactions ORDER BY createdAt DESC');
+      return result.values || [];
+    } catch (error) {
+      console.error('Error getting cash flow transactions:', error);
+      return [];
+    }
+  }
+
+  async getCashFlowBalance(): Promise<number> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.query(`
+        SELECT 
+          COALESCE(SUM(CASE WHEN type = 'INFLOW' THEN amount ELSE 0 END), 0) - 
+          COALESCE(SUM(CASE WHEN type = 'OUTFLOW' THEN amount ELSE 0 END), 0) as balance
+        FROM cash_flow_transactions
+      `);
+      return result.values?.[0]?.balance || 0;
+    } catch (error) {
+      console.error('Error getting cash flow balance:', error);
+      return 0;
+    }
+  }
+
+  // Order Methods
+  async createOrder(orderData: any): Promise<string | null> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const id = this.generateUUID();
+      await this.db.run(
+        'INSERT INTO orders (id, total, paid, change, orderType, orderStatus, items) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [id, orderData.total, orderData.paid, orderData.change, orderData.orderType, orderData.orderStatus || 'QUEUING', JSON.stringify(orderData.items || [])]
+      );
+      return id;
+    } catch (error) {
+      console.error('Error creating order:', error);
+      return null;
+    }
+  }
+
+  async getAllOrders(): Promise<any[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.query('SELECT * FROM orders ORDER BY createdAt DESC');
+      const orders = result.values || [];
+      
+      // Parse items JSON for each order
+      return orders.map((order: any) => ({
+        ...order,
+        items: JSON.parse(order.items || '[]')
+      }));
+    } catch (error) {
+      console.error('Error getting orders:', error);
+      return [];
+    }
+  }
+
+  // Delete Methods
+  async deleteFlavor(id: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run('DELETE FROM flavors WHERE id = ?', [id]);
+      const success = (result.changes ?? 0) > 0;
+      console.log('🔍 SQLiteService deleteFlavor result:', { id, changes: result.changes, success });
+      return success; // Return false if not found, don't throw
+    } catch (error) {
+      console.error('❌ Error deleting flavor from SQLite:', error);
+      return false; // Return false instead of throwing
+    }
+  }
+
+  async deleteProduct(id: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      // Delete product and related variants (CASCADE will handle this)
+      const result = await this.db.run('DELETE FROM products WHERE id = ?', [id]);
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      return false;
+    }
+  }
+
+  async deleteAddon(id: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run('DELETE FROM addons WHERE id = ?', [id]);
+      const success = (result.changes ?? 0) > 0;
+      console.log('🔍 SQLiteService deleteAddon result:', { id, changes: result.changes, success });
+      return success; // Return false if not found, don't throw
+    } catch (error) {
+      console.error('❌ Error deleting addon from SQLite:', error);
+      return false; // Return false instead of throwing
+    }
+  }
+
+  async deleteIngredient(id: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run('DELETE FROM ingredients WHERE id = ?', [id]);
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error deleting ingredient:', error);
+      return false;
+    }
+  }
+
+  async deleteMaterial(id: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run('DELETE FROM materials WHERE id = ?', [id]);
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error deleting material:', error);
+      return false;
+    }
+  }
+
+  async deleteOrder(id: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run('DELETE FROM orders WHERE id = ?', [id]);
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      return false;
+    }
+  }
+
+  // Update Methods
+  async updateFlavor(id: string, name: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run(
+        'UPDATE flavors SET name = ? WHERE id = ?',
+        [name, id]
+      );
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error updating flavor:', error);
+      return false;
+    }
+  }
+
+  async updateProduct(id: string, name: string, category: string, imageUrl?: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run(
+        'UPDATE products SET name = ?, category = ?, imageUrl = ? WHERE id = ?',
+        [name, category, imageUrl || null, id]
+      );
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error updating product:', error);
+      return false;
+    }
+  }
+
+  async updateAddon(id: string, name: string, price: number): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run(
+        'UPDATE addons SET name = ?, price = ? WHERE id = ?',
+        [name, price, id]
+      );
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error updating addon:', error);
+      return false;
+    }
+  }
+
+  async updateIngredient(id: string, name: string, unit: string, pricePerPurchase: number, unitsPerPurchase: number): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const pricePerUnit = pricePerPurchase / unitsPerPurchase;
+      const result = await this.db.run(
+        'UPDATE ingredients SET name = ?, unit = ?, pricePerPurchase = ?, unitsPerPurchase = ?, pricePerUnit = ? WHERE id = ?',
+        [name, unit, pricePerPurchase, unitsPerPurchase, pricePerUnit, id]
+      );
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error updating ingredient:', error);
+      return false;
+    }
+  }
+
+  async updateMaterial(id: string, name: string, pricePerPiece: number, isPackage: boolean = false, packagePrice?: number, unitsPerPackage?: number): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run(
+        'UPDATE materials SET name = ?, pricePerPiece = ?, isPackage = ?, packagePrice = ?, unitsPerPackage = ? WHERE id = ?',
+        [name, pricePerPiece, isPackage ? 1 : 0, packagePrice || null, unitsPerPackage || null, id]
+      );
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error updating material:', error);
+      return false;
+    }
+  }
+
+  async updateOrder(id: string, updates: any): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const setClause = Object.keys(updates)
+        .map((key) => `${key} = ?`)
+        .join(', ');
+      const values = [...Object.values(updates), id];
+
+      const result = await this.db.run(
+        `UPDATE orders SET ${setClause} WHERE id = ?`,
+        values
+      );
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error updating order:', error);
+      return false;
+    }
   }
 }
 

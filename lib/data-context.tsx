@@ -60,6 +60,7 @@ interface DataContextType {
   createFlavor: (flavor: any) => Promise<void>;
   updateFlavor: (id: string, flavor: any) => Promise<void>;
   deleteFlavor: (id: string) => Promise<void>;
+  importPapaBearFlavors: () => Promise<number>;
   
   // Dashboard
   getDashboardStats: (filters?: any) => Promise<any>;
@@ -314,11 +315,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Flavors CRUD operations
   const loadFlavors = async () => {
     try {
-      console.log('Loading flavors...');
+      console.log('🔄 Loading flavors...');
+      // Ensure database is initialized before loading
+      await currentDataService.initializeDatabase();
       const data = await currentDataService.getFlavors();
+      console.log('✅ Loaded flavors:', data.length, 'items');
       setFlavors(data);
     } catch (error) {
-      console.error('Failed to load flavors:', error);
+      console.error('❌ Failed to load flavors:', error);
       // Fallback to empty array
       setFlavors([]);
     }
@@ -326,10 +330,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const createFlavor = async (flavor: any) => {
     try {
+      console.log('🔄 Creating flavor:', flavor.name);
+      // Ensure database is initialized before creating
+      await currentDataService.initializeDatabase();
       const newFlavor = await currentDataService.createFlavor(flavor);
-      setFlavors(prev => [newFlavor, ...prev]);
+      if (newFlavor) {
+        // Check if flavor already exists in local state to avoid duplicates
+        const existsInState = flavors.some(f => f.id === newFlavor.id);
+        if (!existsInState) {
+          setFlavors(prev => [newFlavor, ...prev]);
+          console.log('✅ Flavor created and added to state:', newFlavor.name);
+        } else {
+          console.log('✅ Flavor already exists in state:', newFlavor.name);
+        }
+      } else {
+        throw new Error('Failed to create flavor - no data returned');
+      }
     } catch (error) {
-      console.error('Failed to create flavor:', error);
+      console.error('❌ Failed to create flavor:', error);
       throw error;
     }
   };
@@ -337,7 +355,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const updateFlavor = async (id: string, flavor: any) => {
     try {
       const updatedFlavor = await currentDataService.updateFlavor(id, flavor);
-      setFlavors(prev => prev.map(f => f.id === id ? updatedFlavor : f));
+      if (updatedFlavor) {
+        setFlavors(prev => prev.map(f => f.id === id ? updatedFlavor : f));
+      } else {
+        throw new Error('Failed to update flavor - no data returned');
+      }
     } catch (error) {
       console.error('Failed to update flavor:', error);
       throw error;
@@ -346,10 +368,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const deleteFlavor = async (id: string) => {
     try {
-      await currentDataService.deleteFlavor(id);
+      console.log('🔄 Deleting flavor:', id);
+      // Ensure database is initialized before deleting
+      await currentDataService.initializeDatabase();
+      const success = await currentDataService.deleteFlavor(id);
+      
+      // Always update state, regardless of database result (match deleteAddon pattern)
       setFlavors(prev => prev.filter(f => f.id !== id));
+      
+      if (success) {
+        console.log('✅ Flavor deleted from database and state:', id);
+      } else {
+        console.log('⚠️ Flavor not found in database but removed from state:', id);
+      }
     } catch (error) {
-      console.error('Failed to delete flavor:', error);
+      console.error('❌ Failed to delete flavor:', error);
       throw error;
     }
   };
@@ -446,6 +479,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     createFlavor,
     updateFlavor,
     deleteFlavor,
+    importPapaBearFlavors: currentDataService.importPapaBearFlavors,
     getDashboardStats,
     
     // Cash Flow methods

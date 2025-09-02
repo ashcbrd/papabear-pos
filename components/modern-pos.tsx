@@ -113,6 +113,7 @@ export default function ModernPOSPage() {
   const [selectedSize, setSelectedSize] = useState<Size | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<OrderAddon[]>([]);
   const [isOrderPanelVisible, setIsOrderPanelVisible] = useState(false);
+  const [isQueueVisible, setIsQueueVisible] = useState(false);
   const [cashDrawerBalance, setCashDrawerBalance] = useState(0);
 
   const sizeSelectionRef = useRef<HTMLDivElement>(null);
@@ -479,6 +480,15 @@ export default function ModernPOSPage() {
                 </div>
               </div>
               <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setIsQueueVisible(!isQueueVisible)}
+                  className="bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors"
+                >
+                  <span className="text-lg">📝</span>
+                  <span className="text-sm font-semibold text-blue-700">
+                    Queue ({orders.length})
+                  </span>
+                </button>
                 <div className="bg-green-50 border border-green-200 px-3 py-1 rounded-lg flex items-center space-x-2">
                   <Wallet className="w-4 h-4 text-green-600" />
                   <span className="text-sm font-semibold text-green-700">
@@ -494,144 +504,6 @@ export default function ModernPOSPage() {
         </header>
 
         <div className="max-w-7xl mx-auto px-6 py-8">
-          {/* Queue Section */}
-          <div className="mb-12">
-            <div className="card">
-              <div className="p-6 border-b border-neutral-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-3">
-                      📝 Queue Orders
-                    </h2>
-                    <p className="text-sm text-neutral-600 mt-1">
-                      {orders.length} order{orders.length !== 1 ? "s" : ""}{" "}
-                      waiting to be served
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
-                    <span className="text-sm font-medium text-neutral-600">
-                      Live Updates
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6">
-                {orders.length > 0 ? (
-                  <div className="flex gap-6 overflow-x-auto pb-4">
-                    {orders.map((order) => (
-                      <div
-                        key={order.id}
-                        className="card card-hover bg-white border-2 border-transparent hover:border-green-200 transition-all duration-300 min-w-[300px] max-w-[320px] flex-shrink-0"
-                      >
-                        {/* Order Header */}
-                        <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-green-50 to-emerald-50">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <span className="font-bold text-lg text-neutral-900">
-                                #{order.id.slice(0, 6)}
-                              </span>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="badge badge-primary text-xs">
-                                  {formatOrderType(order.orderType)}
-                                </span>
-                                <span className="text-xs text-neutral-500">
-                                  {new Date(
-                                    order.createdAt || Date.now()
-                                  ).toLocaleTimeString()}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                              <span className="text-lg">🍽️</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Order Items */}
-                        <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
-                          {order.items?.map((item, index) => (
-                            <div
-                              key={index}
-                              className="bg-neutral-50 rounded-lg p-3"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <h4 className="font-semibold text-sm text-neutral-900">
-                                    {item.product?.name || "Unknown Product"}
-                                  </h4>
-                                  <div className="flex gap-1 mt-1">
-                                    <span className="badge badge-neutral text-xs">
-                                      {item.flavor?.name || "Unknown Flavor"}
-                                    </span>
-                                    <span className="badge badge-success text-xs">
-                                      {item.size?.name || "Unknown Size"}
-                                    </span>
-                                  </div>
-                                  {item.addons?.length > 0 && (
-                                    <div className="flex gap-1 mt-2 flex-wrap">
-                                      {item.addons.map((a, addonIndex) => (
-                                        <span
-                                          key={a.addon?.id || addonIndex}
-                                          className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded-full"
-                                        >
-                                          +{a.addon?.name || "Unknown Addon"} x
-                                          {a.quantity}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="text-right">
-                                  <span className="font-bold text-sm text-neutral-900">
-                                    x{item.quantity}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          )) || []}
-                        </div>
-
-                        {/* Order Actions */}
-                        <div className="p-4 border-t border-neutral-200 bg-neutral-50">
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="text-sm font-medium text-neutral-600">
-                              Total Amount
-                            </span>
-                            <span className="font-bold text-lg text-green-600">
-                              ₱{order.total?.toFixed(2) || "0.00"}
-                            </span>
-                          </div>
-                          <LongPressServeButton
-                            onConfirm={() => handleServe(order.id)}
-                            idleLabel="Serve Order"
-                            confirmingLabel="Hold to Confirm"
-                            successLabel="Served!"
-                            holdMs={1000}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-16">
-                    <div className="w-24 h-24 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-6">
-                      <span className="text-4xl">🍽️</span>
-                    </div>
-                    <h3 className="text-xl font-semibold text-neutral-700 mb-2">
-                      No orders in queue
-                    </h3>
-                    <p className="text-neutral-500 max-w-sm mx-auto">
-                      New orders will appear here automatically when customers
-                      place them.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
           {/* Welcome Section */}
           <div className="text-center space-y-8">
             <div className="space-y-4">
@@ -698,6 +570,159 @@ export default function ModernPOSPage() {
             </div>
           </div>
         </div>
+
+        {/* Queue Orders Overlay */}
+        <div
+          className={`fixed inset-0 z-50 transform transition-transform duration-300 ${
+            isQueueVisible ? "translate-x-0" : "translate-x-full"
+          }`}
+        >
+          <div
+            className="bg-black/50 backdrop-blur-sm absolute inset-0 z-0"
+            onClick={() => setIsQueueVisible(false)}
+          ></div>
+          <div className="bg-white h-full w-full max-w-6xl ml-auto flex flex-col relative shadow-2xl">
+            {/* Queue Header */}
+            <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-3">
+                  📝 Queue Orders
+                </h2>
+                <p className="text-sm text-neutral-600 mt-1">
+                  {orders.length} order{orders.length !== 1 ? "s" : ""} waiting to be served
+                </p>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
+                  <span className="text-sm font-medium text-neutral-600">
+                    Live Updates
+                  </span>
+                </div>
+                <button
+                  onClick={() => setIsQueueVisible(false)}
+                  className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-neutral-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* Queue Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {orders.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {orders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="card card-hover bg-white border-2 border-transparent hover:border-green-200 transition-all duration-300"
+                    >
+                      {/* Order Header */}
+                      <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-green-50 to-emerald-50">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-lg text-neutral-900">
+                              #{order.id.slice(0, 6)}
+                            </span>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="badge badge-primary text-xs">
+                                {formatOrderType(order.orderType)}
+                              </span>
+                              <span className="text-xs text-neutral-500">
+                                {new Date(
+                                  order.createdAt || Date.now()
+                                ).toLocaleTimeString()}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                            <span className="text-lg">🍽️</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Order Items */}
+                      <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
+                        {order.items?.map((item, index) => (
+                          <div
+                            key={index}
+                            className="bg-neutral-50 rounded-lg p-3"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-sm text-neutral-900">
+                                  {item.product?.name || "Unknown Product"}
+                                </h4>
+                                <div className="flex gap-1 mt-1">
+                                  <span className="badge badge-neutral text-xs">
+                                    {item.flavor?.name || "Unknown Flavor"}
+                                  </span>
+                                  <span className="badge badge-success text-xs">
+                                    {item.size?.name || "Unknown Size"}
+                                  </span>
+                                </div>
+                                {item.addons?.length > 0 && (
+                                  <div className="flex gap-1 mt-2 flex-wrap">
+                                    {item.addons.map((a, addonIndex) => (
+                                      <span
+                                        key={a.addon?.id || addonIndex}
+                                        className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded-full"
+                                      >
+                                        +{a.addon?.name || "Unknown Addon"} x
+                                        {a.quantity}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <span className="font-bold text-sm text-neutral-900">
+                                  x{item.quantity}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )) || []}
+                      </div>
+
+                      {/* Order Actions */}
+                      <div className="p-4 border-t border-neutral-200 bg-neutral-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-neutral-600">
+                            Total Amount
+                          </span>
+                          <span className="font-bold text-lg text-green-600">
+                            ₱{order.total?.toFixed(2) || "0.00"}
+                          </span>
+                        </div>
+                        <LongPressServeButton
+                          onConfirm={() => handleServe(order.id)}
+                          idleLabel="Serve Order"
+                          confirmingLabel="Hold to Confirm"
+                          successLabel="Served!"
+                          holdMs={1000}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <div className="w-24 h-24 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-6">
+                    <span className="text-4xl">🍽️</span>
+                  </div>
+                  <h3 className="text-xl font-semibold text-neutral-700 mb-2">
+                    No orders in queue
+                  </h3>
+                  <p className="text-neutral-500 max-w-sm mx-auto">
+                    New orders will appear here automatically when customers
+                    place them.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -720,6 +745,15 @@ export default function ModernPOSPage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setIsQueueVisible(!isQueueVisible)}
+                className="bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors"
+              >
+                <span className="text-lg">📝</span>
+                <span className="text-sm font-semibold text-blue-700">
+                  Queue ({orders.length})
+                </span>
+              </button>
               <div className="bg-green-50 border border-green-200 px-3 py-1 rounded-lg flex items-center space-x-2">
                 <Wallet className="w-4 h-4 text-green-600" />
                 <span className="text-sm font-semibold text-green-700">
@@ -1494,6 +1528,159 @@ export default function ModernPOSPage() {
       >
         <div>Order details would go here</div>
       </OrderConfirmationDialog>
+
+      {/* Queue Orders Overlay */}
+      <div
+        className={`fixed inset-0 z-50 transform transition-transform duration-300 ${
+          isQueueVisible ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div
+          className="bg-black/50 backdrop-blur-sm absolute inset-0 z-0"
+          onClick={() => setIsQueueVisible(false)}
+        ></div>
+        <div className="bg-white h-full w-full max-w-6xl ml-auto flex flex-col relative shadow-2xl">
+          {/* Queue Header */}
+          <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-3">
+                📝 Queue Orders
+              </h2>
+              <p className="text-sm text-neutral-600 mt-1">
+                {orders.length} order{orders.length !== 1 ? "s" : ""} waiting to be served
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
+                <span className="text-sm font-medium text-neutral-600">
+                  Live Updates
+                </span>
+              </div>
+              <button
+                onClick={() => setIsQueueVisible(false)}
+                className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-neutral-500" />
+              </button>
+            </div>
+          </div>
+
+          {/* Queue Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {orders.length > 0 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                {orders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="card card-hover bg-white border-2 border-transparent hover:border-green-200 transition-all duration-300"
+                  >
+                    {/* Order Header */}
+                    <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-green-50 to-emerald-50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-lg text-neutral-900">
+                            #{order.id.slice(0, 6)}
+                          </span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="badge badge-primary text-xs">
+                              {formatOrderType(order.orderType)}
+                            </span>
+                            <span className="text-xs text-neutral-500">
+                              {new Date(
+                                order.createdAt || Date.now()
+                              ).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                          <span className="text-lg">🍽️</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Order Items */}
+                    <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
+                      {order.items?.map((item, index) => (
+                        <div
+                          key={index}
+                          className="bg-neutral-50 rounded-lg p-3"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-sm text-neutral-900">
+                                {item.product?.name || "Unknown Product"}
+                              </h4>
+                              <div className="flex gap-1 mt-1">
+                                <span className="badge badge-neutral text-xs">
+                                  {item.flavor?.name || "Unknown Flavor"}
+                                </span>
+                                <span className="badge badge-success text-xs">
+                                  {item.size?.name || "Unknown Size"}
+                                </span>
+                              </div>
+                              {item.addons?.length > 0 && (
+                                <div className="flex gap-1 mt-2 flex-wrap">
+                                  {item.addons.map((a, addonIndex) => (
+                                    <span
+                                      key={a.addon?.id || addonIndex}
+                                      className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded-full"
+                                    >
+                                      +{a.addon?.name || "Unknown Addon"} x
+                                      {a.quantity}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <span className="font-bold text-sm text-neutral-900">
+                                x{item.quantity}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )) || []}
+                    </div>
+
+                    {/* Order Actions */}
+                    <div className="p-4 border-t border-neutral-200 bg-neutral-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-medium text-neutral-600">
+                          Total Amount
+                        </span>
+                        <span className="font-bold text-lg text-green-600">
+                          ₱{order.total?.toFixed(2) || "0.00"}
+                        </span>
+                      </div>
+                      <LongPressServeButton
+                        onConfirm={() => handleServe(order.id)}
+                        idleLabel="Serve Order"
+                        confirmingLabel="Hold to Confirm"
+                        successLabel="Served!"
+                        holdMs={1000}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <div className="w-24 h-24 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-6">
+                  <span className="text-4xl">🍽️</span>
+                </div>
+                <h3 className="text-xl font-semibold text-neutral-700 mb-2">
+                  No orders in queue
+                </h3>
+                <p className="text-neutral-500 max-w-sm mx-auto">
+                  New orders will appear here automatically when customers
+                  place them.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

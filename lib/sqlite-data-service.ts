@@ -211,14 +211,27 @@ export class SQLiteDataService {
     const db = sqliteService.getDB();
     
     const id = this.generateUUID();
-    const now = new Date().toISOString();
     
-    await db.run(
-      'INSERT INTO flavors (id, name, created_at) VALUES (?, ?, ?)',
-      [id, flavor.name, now]
-    );
-
-    return { id, ...flavor, createdAt: now };
+    try {
+      // Try with createdAt column first (for newer schema)
+      const now = new Date().toISOString();
+      await db.run(
+        'INSERT OR IGNORE INTO flavors (id, name, createdAt) VALUES (?, ?, ?)',
+        [id, flavor.name, now]
+      );
+      return { id, ...flavor, createdAt: now };
+    } catch (error: any) {
+      if (error.message && error.message.includes('no column named createdAt')) {
+        // Fallback to insertion without createdAt for older schema
+        console.log('Using legacy flavors table schema without createdAt column');
+        await db.run(
+          'INSERT OR IGNORE INTO flavors (id, name) VALUES (?, ?)',
+          [id, flavor.name]
+        );
+        return { id, ...flavor, createdAt: new Date().toISOString() };
+      }
+      throw error; // Re-throw if it's a different error
+    }
   }
 
   async updateFlavor(id: string, flavor: { name: string }): Promise<any> {
