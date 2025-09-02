@@ -54,7 +54,7 @@ export default function Home() {
               </div>
 
               {/* CTA Buttons */}
-              <div className="flex flex-col  gap-4">
+              <div className="flex flex-col gap-4">
                 <button
                   onClick={() => router.push("/pos")}
                   className="group relative overflow-hidden bg-gradient-to-r from-green-500 to-green-600 text-white p-8 rounded-2xl font-semibold text-lg shadow-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-300"
