@@ -137,9 +137,13 @@ export default function ModernPOSPage() {
   };
 
   useEffect(() => {
+    // Load cash drawer balance on component mount
+    loadCashDrawerBalance();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     if (orderType) {
       loadOrders();
-      loadCashDrawerBalance();
     }
   }, [orderType, loadOrders]);
 
@@ -437,50 +441,87 @@ export default function ModernPOSPage() {
     setOrderType("");
   };
 
+  // Shared header component
+  const renderHeader = () => (
+    <header className="bg-white/80 backdrop-blur-lg border-b border-neutral-200 sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
+              <span className="text-white font-bold text-lg">🐻</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-neutral-900">
+                Papa Bear Café
+              </h1>
+              <p className="text-sm text-neutral-600">Point of Sale System</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setIsQueueVisible(!isQueueVisible)}
+              className="bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors"
+            >
+              <span className="text-lg">📝</span>
+              <span className="text-sm font-semibold text-blue-700">
+                Queue ({orders.length})
+              </span>
+            </button>
+            <div className="bg-green-50 border border-green-200 px-3 py-1 rounded-lg flex items-center space-x-2">
+              <Wallet className="w-4 h-4 text-green-600" />
+              <span className="text-sm font-semibold text-green-700">
+                ₱{cashDrawerBalance.toFixed(2)}
+              </span>
+            </div>
+            {orderType ? (
+              // Show order type and cancel button only when in POS mode
+              <div className="flex items-center space-x-2">
+                <div className="badge badge-primary">
+                  {formatOrderType(orderType as OrderType)}
+                </div>
+                <button
+                  onClick={handleCancelOrderType}
+                  className="bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-lg flex items-center space-x-1 transition-colors group"
+                  title="Cancel and go back to order type selection"
+                >
+                  <ArrowLeft size={14} className="text-red-600 group-hover:text-red-700" />
+                  <span className="text-xs font-semibold text-red-600 group-hover:text-red-700">
+                    Cancel
+                  </span>
+                </button>
+              </div>
+            ) : (
+              // Show date on loading screen
+              <div className="badge badge-neutral">
+                {formatDate(new Date())}
+              </div>
+            )}
+            {orderType && (
+              // Show cart button only when in POS mode
+              <button
+                onClick={() => setIsOrderPanelVisible(true)}
+                className="btn btn-primary btn-md lg:hidden relative"
+              >
+                <ShoppingCart size={18} />
+                Cart ({orderItems.length})
+                {orderItems.length > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {orderItems.length}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+
   // Landing screen (choose order type)
   if (!orderType) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100">
-        {/* Header */}
-        <header className="bg-white/80 backdrop-blur-lg border-b border-neutral-200">
-          <div className="max-w-7xl mx-auto px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">🐻</span>
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-neutral-900">
-                    Papa Bear Café
-                  </h1>
-                  <p className="text-sm text-neutral-600">
-                    Point of Sale System
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => setIsQueueVisible(!isQueueVisible)}
-                  className="bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors"
-                >
-                  <span className="text-lg">📝</span>
-                  <span className="text-sm font-semibold text-blue-700">
-                    Queue ({orders.length})
-                  </span>
-                </button>
-                <div className="bg-green-50 border border-green-200 px-3 py-1 rounded-lg flex items-center space-x-2">
-                  <Wallet className="w-4 h-4 text-green-600" />
-                  <span className="text-sm font-semibold text-green-700">
-                    ₱{cashDrawerBalance.toFixed(2)}
-                  </span>
-                </div>
-                <div className="badge badge-neutral">
-                  {formatDate(new Date())}
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
+        {renderHeader()}
 
         <div className="max-w-7xl mx-auto px-6 py-8">
           {/* Welcome */}
@@ -703,68 +744,7 @@ export default function ModernPOSPage() {
   // Main POS screen
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-lg border-b border-neutral-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
-                <span className="text-white font-bold text-lg">🐻</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-neutral-900">
-                  Papa Bear Café
-                </h1>
-                <p className="text-sm text-neutral-600">Point of Sale System</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setIsQueueVisible(!isQueueVisible)}
-                className="bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors"
-              >
-                <span className="text-lg">📝</span>
-                <span className="text-sm font-semibold text-blue-700">
-                  Queue ({orders.length})
-                </span>
-              </button>
-              <div className="bg-green-50 border border-green-200 px-3 py-1 rounded-lg flex items-center space-x-2">
-                <Wallet className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-semibold text-green-700">
-                  ₱{cashDrawerBalance.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="badge badge-primary">
-                  {formatOrderType(orderType as OrderType)}
-                </div>
-                <button
-                  onClick={handleCancelOrderType}
-                  className="bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-lg flex items-center space-x-1 transition-colors group"
-                  title="Cancel and go back to order type selection"
-                >
-                  <ArrowLeft size={14} className="text-red-600 group-hover:text-red-700" />
-                  <span className="text-xs font-semibold text-red-600 group-hover:text-red-700">
-                    Cancel
-                  </span>
-                </button>
-              </div>
-              <button
-                onClick={() => setIsOrderPanelVisible(true)}
-                className="btn btn-primary btn-md lg:hidden relative"
-              >
-                <ShoppingCart size={18} />
-                Cart ({orderItems.length})
-                {orderItems.length > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {orderItems.length}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      {renderHeader()}
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
