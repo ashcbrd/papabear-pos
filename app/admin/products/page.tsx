@@ -631,6 +631,7 @@ function NestedSelectors<
     name: string;
     measurementUnit?: string;
     pricePerPiece?: number;
+    stock?: { quantity: number };
   }
 >({
   title,
@@ -686,6 +687,11 @@ function NestedSelectors<
                   {found && (
                     <p className="text-xs text-gray-500">
                       Unit: {getUnit(found)}
+                      {found.stock && (
+                        <span className={`ml-2 ${found.stock.quantity < 10 ? 'text-red-600' : 'text-green-600'}`}>
+                          • Stock: {found.stock.quantity}
+                        </span>
+                      )}
                     </p>
                   )}
                 </div>

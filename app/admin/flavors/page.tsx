@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Palette, Pencil, Trash, Plus, Package, X } from "lucide-react";
+import { Palette, Pencil, Trash, Plus, Package, X, XCircle } from "lucide-react";
 import { useData } from "@/lib/data-context";
 import { formatDate } from "@/lib/date-utils";
 import {
@@ -143,23 +143,6 @@ export default function FlavorsAdminPage() {
     }
   };
 
-  const addIngredientToSelection = () => {
-    setSelectedIngredients([...selectedIngredients, { id: "", quantity: 0 }]);
-  };
-
-  const removeIngredientFromSelection = (index: number) => {
-    setSelectedIngredients(selectedIngredients.filter((_, i) => i !== index));
-  };
-
-  const updateSelectedIngredient = (index: number, field: 'id' | 'quantity', value: string | number) => {
-    const updated = [...selectedIngredients];
-    if (field === 'id') {
-      updated[index].id = value as string;
-    } else {
-      updated[index].quantity = value as number;
-    }
-    setSelectedIngredients(updated);
-  };
 
   const startEdit = async (flavor: Flavor) => {
     setEditingFlavorId(flavor.id);
@@ -313,84 +296,82 @@ export default function FlavorsAdminPage() {
             />
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-lg font-medium text-gray-900">Required Ingredients</h4>
-              <AdminButton
-                size="sm"
-                variant="outline"
-                icon={<Plus size={14} />}
-                onClick={addIngredientToSelection}
-              >
-                Add Ingredient
-              </AdminButton>
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">Required Ingredients</h4>
+              <AdminSelect
+                placeholder="+ Add Ingredient"
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setSelectedIngredients([
+                      ...selectedIngredients,
+                      { id: e.target.value as string, quantity: 1 },
+                    ]);
+                  }
+                }}
+                options={ingredients
+                  .filter((x) => !selectedIngredients.some((it) => it.id === x.id))
+                  .map((x) => ({ label: x.name, value: x.id }))}
+                icon={<Package size={16} />}
+              />
             </div>
 
-            <div className="space-y-3">
-              {selectedIngredients.map((selectedIngredient, index) => {
-                const ingredient = ingredients.find(ing => ing.id === selectedIngredient.id);
-                return (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="md:col-span-2">
-                      <AdminSelect
-                        label="Select Ingredient"
-                        placeholder="Choose an ingredient..."
-                        value={selectedIngredient.id}
-                        onChange={(e) => updateSelectedIngredient(index, 'id', e.target.value)}
-                        options={ingredients.map(ingredient => ({
-                          label: `${ingredient.name} (${ingredient.measurementUnit})${ingredient.stock ? ` - Stock: ${ingredient.stock.quantity}` : ' - No stock info'}`,
-                          value: ingredient.id
-                        }))}
-                        icon={<Package size={16} />}
-                      />
-                    </div>
-
-                    <AdminInput
-                      label="Quantity"
-                      placeholder="e.g., 15"
-                      value={selectedIngredient.quantity.toString()}
-                      onChange={(e) => updateSelectedIngredient(index, 'quantity', parseFloat(e.target.value) || 0)}
-                      type="number"
-                      min="0"
-                      step="0.1"
-                    />
-
-                    <div className="flex items-end">
+            {selectedIngredients.length > 0 && (
+              <div className="space-y-2">
+                {selectedIngredients.map((selectedIngredient, index) => {
+                  const ingredient = ingredients.find((x) => x.id === selectedIngredient.id);
+                  return (
+                    <div
+                      key={selectedIngredient.id}
+                      className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200"
+                    >
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-gray-900">
+                          {ingredient?.name || "Unknown"}
+                        </span>
+                        {ingredient && (
+                          <p className="text-xs text-gray-500">
+                            Unit: {ingredient.measurementUnit}
+                            {ingredient.stock && (
+                              <span className={`ml-2 ${ingredient.stock.quantity < 10 ? 'text-red-600' : 'text-green-600'}`}>
+                                • Stock: {ingredient.stock.quantity}
+                              </span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <AdminInput
+                          type="number"
+                          step="0.1"
+                          placeholder="0"
+                          value={selectedIngredient.quantity}
+                          onChange={(e) => {
+                            const arr = [...selectedIngredients];
+                            arr[index].quantity = parseFloat(e.target.value) || 0;
+                            setSelectedIngredients(arr);
+                          }}
+                          fullWidth={false}
+                          className="w-20"
+                        />
+                        {ingredient && (
+                          <span className="text-xs text-gray-500 min-w-[40px]">
+                            {ingredient.measurementUnit}
+                          </span>
+                        )}
+                      </div>
                       <AdminButton
                         size="sm"
                         variant="danger"
-                        icon={<X size={14} />}
-                        onClick={() => removeIngredientFromSelection(index)}
-                        className="w-full"
-                      >
-                        Remove
-                      </AdminButton>
+                        icon={<XCircle size={14} />}
+                        onClick={() => setSelectedIngredients(selectedIngredients.filter((_, idx) => idx !== index))}
+                      />
                     </div>
-
-                    {ingredient && (
-                      <div className="md:col-span-4 text-sm text-gray-600 bg-white p-3 rounded border">
-                        <div className="flex items-center gap-4">
-                          <span><strong>Unit:</strong> {ingredient.measurementUnit}</span>
-                          {ingredient.stock && (
-                            <span className={`${ingredient.stock.quantity < 10 ? 'text-red-600' : 'text-green-600'}`}>
-                              <strong>Current Stock:</strong> {ingredient.stock.quantity} {ingredient.measurementUnit}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {selectedIngredients.length === 0 && (
-                <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
-                  <Package size={32} className="mx-auto mb-2 text-gray-300" />
-                  <p className="font-medium">No ingredients configured</p>
-                  <p className="text-sm">Click "Add Ingredient" to define what ingredients this flavor requires</p>
-                </div>
-              )}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <AdminActions>
