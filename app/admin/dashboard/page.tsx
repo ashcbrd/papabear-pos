@@ -37,6 +37,7 @@ type DateFilter =
   | "month"
   | "week"
   | "today"
+  | "selected_date"
   | "selected_month"
   | "date_range";
 
@@ -77,6 +78,7 @@ export default function AdminDashboardPage() {
   );
   const [cashFlowData, setCashFlowData] = useState<any[]>([]);
   const [filter, setFilter] = useState<DateFilter>("all");
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
@@ -86,6 +88,7 @@ export default function AdminDashboardPage() {
     { label: "This Month", value: "month" },
     { label: "This Week", value: "week" },
     { label: "Today", value: "today" },
+    { label: "Selected Date", value: "selected_date" },
     { label: "Selected Month", value: "selected_month" },
     { label: "Date Range", value: "date_range" },
   ];
@@ -94,6 +97,7 @@ export default function AdminDashboardPage() {
     try {
       const filters: any = {
         filter,
+        selectedDate: selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined,
         selectedMonth: selectedMonth || undefined,
         startDate: startDate ? format(startDate, "yyyy-MM-dd") : undefined,
         endDate: endDate ? format(endDate, "yyyy-MM-dd") : undefined,
@@ -115,7 +119,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     loadData();
-  }, [filter, selectedMonth, startDate, endDate]);
+  }, [filter, selectedDate, selectedMonth, startDate, endDate]);
 
   if (!stats) {
     return (
@@ -152,7 +156,9 @@ export default function AdminDashboardPage() {
       title: "Total Orders",
       value: (stats.totalOrders || 0).toLocaleString(),
       icon: <ShoppingBag className="w-6 h-6 text-blue-600" />,
-      description: `${stats.todayOrders || 0} orders today`,
+      description: filter === "selected_date" && selectedDate ? 
+        `${stats.todayOrders || 0} orders on ${format(selectedDate, "MMM d")}` :
+        `${stats.todayOrders || 0} orders today`,
     },
     {
       title: "Cash Drawer",
@@ -161,10 +167,14 @@ export default function AdminDashboardPage() {
       description: "Current balance",
     },
     {
-      title: "Today's Sales",
+      title: filter === "selected_date" && selectedDate ? 
+        `${format(selectedDate, "MMM d")} Sales` : 
+        "Today's Sales",
       value: `₱${(stats.todayInflow || 0).toLocaleString()}`,
       icon: <TrendingUp className="w-6 h-6 text-purple-600" />,
-      description: "Revenue today",
+      description: filter === "selected_date" && selectedDate ? 
+        `Revenue on ${format(selectedDate, "MMM d, yyyy")}` : 
+        "Revenue today",
     },
   ];
 
@@ -188,6 +198,7 @@ export default function AdminDashboardPage() {
               onChange={(e) => {
                 setFilter(e.target.value as DateFilter);
                 // Reset other filters when changing filter type
+                if (e.target.value !== "selected_date") setSelectedDate(undefined);
                 if (e.target.value !== "selected_month") setSelectedMonth("");
                 if (e.target.value !== "date_range") {
                   setStartDate(undefined);
@@ -207,6 +218,28 @@ export default function AdminDashboardPage() {
               )}
             </div>
           </div>
+
+          {/* Selected Date Input */}
+          {filter === "selected_date" && (
+            <div className="flex items-center gap-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <Calendar className="w-5 h-5 text-blue-600" />
+              <label className="text-sm font-semibold text-blue-700">
+                Select Date:
+              </label>
+              <DatePicker
+                date={selectedDate}
+                onSelect={setSelectedDate}
+                placeholder="Pick a date"
+                toDate={new Date()}
+                className="bg-white border-blue-300 min-w-[200px]"
+              />
+              {selectedDate && (
+                <span className="text-sm text-blue-600">
+                  Viewing: {format(selectedDate, "MMMM d, yyyy")}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Selected Month Input */}
           {filter === "selected_month" && (
@@ -297,6 +330,9 @@ export default function AdminDashboardPage() {
               {filter === "today" && " Today's data"}
               {filter === "week" && " This week's data"}
               {filter === "month" && " This month's data"}
+              {filter === "selected_date" &&
+                selectedDate &&
+                ` ${format(selectedDate, "MMMM d, yyyy")} data`}
               {filter === "selected_month" &&
                 selectedMonth &&
                 ` ${format(selectedMonth, "MMMM yyyy")} data`}

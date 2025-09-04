@@ -37,7 +37,16 @@
       "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
       "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\app/**)",
       "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\app\\pos/**)",
-      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)"
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\app\\admin\\dashboard/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\app\\admin\\dashboard/**)"
     ],
     "deny": [],
     "ask": []
