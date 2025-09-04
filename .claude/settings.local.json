@@ -22,7 +22,22 @@
       "Bash(npx shadcn@latest add:*)",
       "Bash(npm run android:run:*)",
       "Bash(npm run typecheck:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\app/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\app/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\app/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\app/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\prisma/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\components/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\app/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\app\\pos/**)",
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\lib/**)"
     ],
     "deny": [],
     "ask": []

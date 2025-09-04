@@ -412,6 +412,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       console.log('Creating order:', order);
       const newOrder = await currentDataService.createOrder(order);
       setOrders(prev => [newOrder, ...prev]);
+      
+      // Refresh materials and ingredients to reflect stock changes
+      await loadMaterials();
+      await loadIngredients();
+      await loadAddons(); // In case addons were used and their stock changed
+      
       return newOrder;
     } catch (error) {
       console.error('Failed to create order:', error);
