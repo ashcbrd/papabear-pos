@@ -57,10 +57,17 @@ interface DataContextType {
   
   // Flavors
   loadFlavors: () => Promise<void>;
-  createFlavor: (flavor: any) => Promise<void>;
+  createFlavor: (flavor: any) => Promise<any>;
   updateFlavor: (id: string, flavor: any) => Promise<void>;
   deleteFlavor: (id: string) => Promise<void>;
   importPapaBearFlavors: () => Promise<number>;
+  
+  // Flavor-ingredient relationships
+  getFlavorsWithIngredients: () => Promise<any[]>;
+  addFlavorIngredient: (flavorId: string, ingredientId: string, quantity: number) => Promise<boolean>;
+  removeFlavorIngredient: (flavorId: string, ingredientId: string) => Promise<boolean>;
+  updateFlavorIngredient: (flavorId: string, ingredientId: string, quantity: number) => Promise<boolean>;
+  getFlavorIngredients: (flavorId: string) => Promise<any[]>;
   
   // Dashboard
   getDashboardStats: (filters?: any) => Promise<any>;
@@ -343,6 +350,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         } else {
           console.log('✅ Flavor already exists in state:', newFlavor.name);
         }
+        return newFlavor;
       } else {
         throw new Error('Failed to create flavor - no data returned');
       }
@@ -480,6 +488,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     updateFlavor,
     deleteFlavor,
     importPapaBearFlavors: currentDataService.importPapaBearFlavors,
+    
+    // Flavor-ingredient relationships
+    getFlavorsWithIngredients: async () => await currentDataService.getFlavorsWithIngredients(),
+    addFlavorIngredient: async (flavorId: string, ingredientId: string, quantity: number) => 
+      await currentDataService.addFlavorIngredient(flavorId, ingredientId, quantity),
+    removeFlavorIngredient: async (flavorId: string, ingredientId: string) => 
+      await currentDataService.removeFlavorIngredient(flavorId, ingredientId),
+    updateFlavorIngredient: async (flavorId: string, ingredientId: string, quantity: number) => 
+      await currentDataService.updateFlavorIngredient(flavorId, ingredientId, quantity),
+    getFlavorIngredients: async (flavorId: string) => await currentDataService.getFlavorIngredients(flavorId),
+    
     getDashboardStats,
     
     // Cash Flow methods

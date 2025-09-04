@@ -35,6 +35,13 @@ export interface DatabaseService {
   updateFlavor: (id: string, flavor: { name: string }) => Promise<any>;
   deleteFlavor: (id: string) => Promise<boolean>;
   importPapaBearFlavors: () => Promise<number>;
+  
+  // Flavor-ingredient relationships
+  getFlavorsWithIngredients: () => Promise<any[]>;
+  addFlavorIngredient: (flavorId: string, ingredientId: string, quantity: number) => Promise<boolean>;
+  removeFlavorIngredient: (flavorId: string, ingredientId: string) => Promise<boolean>;
+  updateFlavorIngredient: (flavorId: string, ingredientId: string, quantity: number) => Promise<boolean>;
+  getFlavorIngredients: (flavorId: string) => Promise<any[]>;
 
   // Cash flow
   getCashFlowTransactions: (filters?: any) => Promise<any[]>;
@@ -129,6 +136,7 @@ class AndroidDatabaseService implements DatabaseService {
       "papabear_stock",
       "papabear_flavors",
       "papabear_product_flavors",
+      "papabear_flavor_ingredients", // flavor-ingredient relationships
       this.CASH_TX_KEY, // unified cash tx list
     ];
     for (const k of arrayKeys) {
@@ -217,13 +225,35 @@ class AndroidDatabaseService implements DatabaseService {
             "SELECT * FROM variants WHERE productId = ? ORDER BY createdAt",
             [p.id]
           );
-          const sizes = (variantsRes.values || []).map((v: any) => ({
-            id: v.id,
-            name: v.name,
-            price: v.price,
-            materials: [],
-            ingredients: [],
-          }));
+          const sizes = await Promise.all(
+            (variantsRes.values || []).map(async (v: any) => {
+              // Get materials for this variant
+              const materialsRes = await db.query(
+                `SELECT vm.quantity as quantityUsed, m.*
+                 FROM variant_materials vm
+                 INNER JOIN materials m ON m.id = vm.materialId
+                 WHERE vm.variantId = ?`,
+                [v.id]
+              );
+
+              return {
+                id: v.id,
+                name: v.name,
+                price: v.price,
+                materials: (materialsRes.values || []).map((m: any) => ({
+                  material: {
+                    id: m.id,
+                    name: m.name,
+                    pricePerPiece: m.pricePerPiece,
+                    isPackage: m.isPackage,
+                    packagePrice: m.packagePrice,
+                    unitsPerPackage: m.unitsPerPackage,
+                  },
+                  quantityUsed: m.quantityUsed,
+                })),
+              };
+            })
+          );
 
           // Flavors (JOIN)
           const flavorRows = await db.query(
@@ -268,8 +298,17 @@ class AndroidDatabaseService implements DatabaseService {
               id: v.id,
               name: v.name,
               price: v.price,
-              materials: [],
-              ingredients: [],
+              materials: (v.materials || []).map((m: any) => ({
+                material: {
+                  id: m.id,
+                  name: m.name || 'Unknown Material',
+                  pricePerPiece: m.pricePerPiece || 0,
+                  isPackage: m.isPackage || false,
+                  packagePrice: m.packagePrice,
+                  unitsPerPackage: m.unitsPerPackage,
+                },
+                quantityUsed: m.quantity || 0,
+              })),
             })) || [];
 
         const fl =
@@ -318,7 +357,7 @@ class AndroidDatabaseService implements DatabaseService {
               [id, product.name, dbCategory, product.imageUrl || null, now]
             );
 
-            // Sizes (variants)
+            // Sizes (variants) with materials
             if (product.sizes?.length) {
               for (const s of product.sizes) {
                 const varId = this.generateId();
@@ -326,6 +365,17 @@ class AndroidDatabaseService implements DatabaseService {
                   "INSERT INTO variants (id, name, price, productId, createdAt) VALUES (?, ?, ?, ?, ?)",
                   [varId, s.name, s.price, id, now]
                 );
+
+                // Save materials for this size
+                if (s.materials?.length) {
+                  for (const material of s.materials) {
+                    const matId = this.generateId();
+                    await db.run(
+                      "INSERT INTO variant_materials (id, variantId, materialId, quantity) VALUES (?, ?, ?, ?)",
+                      [matId, varId, material.id, material.quantity]
+                    );
+                  }
+                }
               }
             }
 
@@ -390,7 +440,7 @@ class AndroidDatabaseService implements DatabaseService {
           products.push(newProduct);
           this.setToWebStorage("papabear_products", products);
 
-          // sizes
+          // sizes with materials
           if (product.sizes?.length) {
             const newVariants = product.sizes.map((s: any) => ({
               id: this.generateId(),
@@ -398,6 +448,7 @@ class AndroidDatabaseService implements DatabaseService {
               price: s.price,
               productId: id,
               createdAt: now,
+              materials: s.materials || [], // Store materials directly in variant for web storage
             }));
             variants.push(...newVariants);
             this.setToWebStorage("papabear_variants", variants);
@@ -441,14 +492,26 @@ class AndroidDatabaseService implements DatabaseService {
           [product.name, dbCategory, product.imageUrl || null, id]
         );
 
-        // Rebuild sizes
+        // Rebuild sizes with materials
         await db.run("DELETE FROM variants WHERE productId = ?", [id]);
         if (product.sizes?.length) {
           for (const s of product.sizes) {
+            const varId = this.generateId();
             await db.run(
               "INSERT INTO variants (id, name, price, productId, createdAt) VALUES (?, ?, ?, ?, ?)",
-              [this.generateId(), s.name, s.price, id, new Date().toISOString()]
+              [varId, s.name, s.price, id, new Date().toISOString()]
             );
+
+            // Save materials for this size
+            if (s.materials?.length) {
+              for (const material of s.materials) {
+                const matId = this.generateId();
+                await db.run(
+                  "INSERT INTO variant_materials (id, variantId, materialId, quantity) VALUES (?, ?, ?, ?)",
+                  [matId, varId, material.id, material.quantity]
+                );
+              }
+            }
           }
         }
 
@@ -1159,6 +1222,154 @@ class AndroidDatabaseService implements DatabaseService {
     }
   }
 
+  // =========================================================
+  // STOCK DEDUCTION HELPERS FOR WEB STORAGE
+  // =========================================================
+
+  private calculateWebStockDeductions(items: any[]): Array<{type: string, id: string, quantityUsed: number}> {
+    const stockDeductions = [];
+    
+    console.log(`🔍 [WEB] Calculating stock deductions for ${items.length} items:`, JSON.stringify(items, null, 2));
+    
+    for (const item of items) {
+      const size = item.size;
+      const flavor = item.flavor;
+      const quantity = item.quantity;
+      
+      console.log(`🔍 [WEB] Processing item: product=${item.product?.name}, size=${size?.name}, flavor=${flavor?.name}, quantity=${quantity}`);
+      console.log(`🔍 [WEB] Size materials:`, size?.materials);
+      console.log(`🔍 [WEB] Item addons:`, item.addons);
+      
+      // Get ingredients needed for this flavor (NEW APPROACH)
+      if (flavor?.id) {
+        const flavorIngredients = this.getFromWebStorage<any[]>("papabear_flavor_ingredients")
+          .filter(fi => fi.flavorId === flavor.id);
+        
+        const ingredients = this.getFromWebStorage<any[]>("papabear_ingredients");
+        
+        for (const flavorIngredient of flavorIngredients) {
+          const ingredientId = flavorIngredient.ingredientId;
+          const quantityUsed = flavorIngredient.quantity * quantity;
+          
+          if (ingredientId && quantityUsed > 0) {
+            stockDeductions.push({
+              type: 'ingredient',
+              id: ingredientId,
+              quantityUsed
+            });
+          }
+        }
+      }
+      
+      // Get materials needed for this size (materials still linked to size)
+      if (size?.materials) {
+        for (const sizeMaterial of size.materials) {
+          const materialId = sizeMaterial.material?.id || sizeMaterial.materialId;
+          const quantityUsed = sizeMaterial.quantityUsed * quantity;
+          
+          if (materialId && quantityUsed > 0) {
+            stockDeductions.push({
+              type: 'material',
+              id: materialId,
+              quantityUsed
+            });
+          }
+        }
+      }
+      
+      // Handle addons stock deduction
+      if (item.addons) {
+        for (const addon of item.addons) {
+          const addonId = addon.addon?.id || addon.id;
+          const addonQuantity = addon.quantity;
+          
+          if (addonId && addonQuantity > 0) {
+            stockDeductions.push({
+              type: 'addon',
+              id: addonId,
+              quantityUsed: addonQuantity
+            });
+          }
+        }
+      }
+    }
+    
+    console.log(`Calculated ${stockDeductions.length} stock deductions for web storage order (flavor-based)`);
+    return stockDeductions;
+  }
+
+  private deductWebStock(stockDeductions: Array<{type: string, id: string, quantityUsed: number}>): void {
+    if (!stockDeductions.length) return;
+    
+    // Group deductions by item ID to handle multiple uses of same ingredient/material/addon
+    const deductionMap = new Map();
+    
+    for (const deduction of stockDeductions) {
+      const key = `${deduction.type}-${deduction.id}`;
+      const existing = deductionMap.get(key);
+      if (existing) {
+        existing.quantityUsed += deduction.quantityUsed;
+      } else {
+        deductionMap.set(key, { ...deduction });
+      }
+    }
+    
+    // Apply the deductions to each type
+    for (const [key, deduction] of deductionMap) {
+      this.updateWebStockQuantity(deduction.type, deduction.id, -deduction.quantityUsed);
+    }
+  }
+
+  private updateWebStockQuantity(type: string, itemId: string, quantityChange: number): void {
+    console.log(`Web Stock Update: ${type} ID ${itemId} - Change: ${quantityChange}`);
+    
+    try {
+      let items: any[] = [];
+      let storageKey = '';
+      
+      // Get the appropriate items array based on type
+      switch (type) {
+        case 'ingredient':
+          items = this.getFromWebStorage<any[]>("papabear_ingredients");
+          storageKey = "papabear_ingredients";
+          break;
+        case 'material':
+          items = this.getFromWebStorage<any[]>("papabear_materials");
+          storageKey = "papabear_materials";
+          break;
+        case 'addon':
+          items = this.getFromWebStorage<any[]>("papabear_addons");
+          storageKey = "papabear_addons";
+          break;
+        default:
+          console.warn(`Unknown stock type: ${type}`);
+          return;
+      }
+      
+      // Find the item and update its stock
+      const itemIndex = items.findIndex((item: any) => item.id === itemId);
+      if (itemIndex !== -1) {
+        const currentStock = items[itemIndex].stock?.quantity || 0;
+        const newStock = Math.max(0, currentStock + quantityChange);
+        
+        // Update the stock
+        if (!items[itemIndex].stock) {
+          items[itemIndex].stock = {};
+        }
+        items[itemIndex].stock.quantity = newStock;
+        
+        // Save back to storage
+        this.setToWebStorage(storageKey, items);
+        
+        console.log(`Updated ${type} ${itemId}: ${currentStock} -> ${newStock} (change: ${quantityChange})`);
+      } else {
+        console.warn(`${type} with ID ${itemId} not found for stock update`);
+      }
+    } catch (error) {
+      console.error(`Error updating web stock for ${type} ${itemId}:`, error);
+    }
+  }
+
   async createOrder(orderData: any): Promise<any> {
     if (!this.isInitialized) await this.initializeDatabase();
 
@@ -1176,6 +1387,10 @@ class AndroidDatabaseService implements DatabaseService {
         createdAt: new Date().toISOString(),
       };
     } else {
+      // Calculate and apply stock deductions for web storage
+      const stockDeductions = this.calculateWebStockDeductions(orderData.items || []);
+      this.deductWebStock(stockDeductions);
+
       const id = this.generateId();
       const now = new Date().toISOString();
       const orders = this.getFromWebStorage<any[]>("papabear_orders");
@@ -1191,6 +1406,8 @@ class AndroidDatabaseService implements DatabaseService {
       };
       orders.push(newOrder);
       this.setToWebStorage("papabear_orders", orders);
+
+      console.log('Order created successfully with stock deductions applied (web storage)');
       return newOrder;
     }
   }
@@ -1513,6 +1730,155 @@ class AndroidDatabaseService implements DatabaseService {
       }));
       this.setToWebStorage("papabear_flavors", flavors);
       return flavors.length;
+    }
+  }
+
+  // =========================================================
+  // FLAVOR-INGREDIENT RELATIONSHIPS
+  // =========================================================
+
+  async getFlavorsWithIngredients(): Promise<any[]> {
+    if (!this.isInitialized) await this.initializeDatabase();
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        return await sqliteService.getFlavorsWithIngredients();
+      } catch (e) {
+        console.error("❌ getFlavorsWithIngredients:", e);
+        return [];
+      }
+    } else {
+      // Web storage implementation
+      const flavors = this.getFromWebStorage<any[]>("papabear_flavors");
+      const flavorIngredients = this.getFromWebStorage<any[]>("papabear_flavor_ingredients");
+      const ingredients = this.getFromWebStorage<any[]>("papabear_ingredients");
+      
+      return flavors.map(flavor => ({
+        ...flavor,
+        ingredients: flavorIngredients
+          .filter(fi => fi.flavorId === flavor.id)
+          .map(fi => {
+            const ingredient = ingredients.find(i => i.id === fi.ingredientId);
+            return {
+              id: fi.ingredientId,
+              name: ingredient?.name || 'Unknown',
+              measurementUnit: ingredient?.measurementUnit || '',
+              quantity: fi.quantity
+            };
+          })
+      }));
+    }
+  }
+
+  async addFlavorIngredient(flavorId: string, ingredientId: string, quantity: number): Promise<boolean> {
+    if (!this.isInitialized) await this.initializeDatabase();
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        return await sqliteService.addFlavorIngredient(flavorId, ingredientId, quantity);
+      } catch (e) {
+        console.error("❌ addFlavorIngredient:", e);
+        return false;
+      }
+    } else {
+      // Web storage implementation
+      const flavorIngredients = this.getFromWebStorage<any[]>("papabear_flavor_ingredients");
+      const existingIndex = flavorIngredients.findIndex(
+        fi => fi.flavorId === flavorId && fi.ingredientId === ingredientId
+      );
+      
+      if (existingIndex !== -1) {
+        // Update existing
+        flavorIngredients[existingIndex].quantity = quantity;
+      } else {
+        // Add new
+        flavorIngredients.push({
+          id: this.generateId(),
+          flavorId,
+          ingredientId,
+          quantity
+        });
+      }
+      
+      this.setToWebStorage("papabear_flavor_ingredients", flavorIngredients);
+      return true;
+    }
+  }
+
+  async removeFlavorIngredient(flavorId: string, ingredientId: string): Promise<boolean> {
+    if (!this.isInitialized) await this.initializeDatabase();
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        return await sqliteService.removeFlavorIngredient(flavorId, ingredientId);
+      } catch (e) {
+        console.error("❌ removeFlavorIngredient:", e);
+        return false;
+      }
+    } else {
+      // Web storage implementation
+      const flavorIngredients = this.getFromWebStorage<any[]>("papabear_flavor_ingredients");
+      const filtered = flavorIngredients.filter(
+        fi => !(fi.flavorId === flavorId && fi.ingredientId === ingredientId)
+      );
+      this.setToWebStorage("papabear_flavor_ingredients", filtered);
+      return filtered.length < flavorIngredients.length;
+    }
+  }
+
+  async updateFlavorIngredient(flavorId: string, ingredientId: string, quantity: number): Promise<boolean> {
+    if (!this.isInitialized) await this.initializeDatabase();
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        return await sqliteService.updateFlavorIngredient(flavorId, ingredientId, quantity);
+      } catch (e) {
+        console.error("❌ updateFlavorIngredient:", e);
+        return false;
+      }
+    } else {
+      // Web storage implementation
+      const flavorIngredients = this.getFromWebStorage<any[]>("papabear_flavor_ingredients");
+      const index = flavorIngredients.findIndex(
+        fi => fi.flavorId === flavorId && fi.ingredientId === ingredientId
+      );
+      
+      if (index !== -1) {
+        flavorIngredients[index].quantity = quantity;
+        this.setToWebStorage("papabear_flavor_ingredients", flavorIngredients);
+        return true;
+      }
+      return false;
+    }
+  }
+
+  async getFlavorIngredients(flavorId: string): Promise<any[]> {
+    if (!this.isInitialized) await this.initializeDatabase();
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        return await sqliteService.getFlavorIngredients(flavorId);
+      } catch (e) {
+        console.error("❌ getFlavorIngredients:", e);
+        return [];
+      }
+    } else {
+      // Web storage implementation
+      const flavorIngredients = this.getFromWebStorage<any[]>("papabear_flavor_ingredients");
+      const ingredients = this.getFromWebStorage<any[]>("papabear_ingredients");
+      
+      return flavorIngredients
+        .filter(fi => fi.flavorId === flavorId)
+        .map(fi => {
+          const ingredient = ingredients.find(i => i.id === fi.ingredientId);
+          return {
+            quantity: fi.quantity,
+            id: fi.ingredientId,
+            name: ingredient?.name || 'Unknown',
+            measurementUnit: ingredient?.measurementUnit || '',
+            pricePerUnit: ingredient?.pricePerUnit || 0
+          };
+        });
     }
   }
 

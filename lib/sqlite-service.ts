@@ -273,6 +273,17 @@ class SQLiteService {
         createdAt TEXT NOT NULL DEFAULT (datetime('now'))
       );`,
 
+      // Flavor ingredients junction table - links flavors to ingredients
+      `CREATE TABLE IF NOT EXISTS flavor_ingredients (
+        id TEXT PRIMARY KEY,
+        flavorId TEXT NOT NULL,
+        ingredientId TEXT NOT NULL,
+        quantity REAL NOT NULL CHECK(quantity > 0),
+        FOREIGN KEY (flavorId) REFERENCES flavors (id) ON DELETE CASCADE,
+        FOREIGN KEY (ingredientId) REFERENCES ingredients (id) ON DELETE CASCADE,
+        UNIQUE(flavorId, ingredientId)
+      );`,
+
       // Variant materials junction table with unique constraint
       `CREATE TABLE IF NOT EXISTS variant_materials (
         id TEXT PRIMARY KEY,
@@ -352,6 +363,8 @@ class SQLiteService {
       `CREATE INDEX IF NOT EXISTS idx_ingredients_name ON ingredients(name);`,
       `CREATE INDEX IF NOT EXISTS idx_addons_name ON addons(name);`,
       `CREATE INDEX IF NOT EXISTS idx_flavors_name ON flavors(name);`,
+      `CREATE INDEX IF NOT EXISTS idx_flavor_ingredients_flavor ON flavor_ingredients(flavorId);`,
+      `CREATE INDEX IF NOT EXISTS idx_flavor_ingredients_ingredient ON flavor_ingredients(ingredientId);`,
       `CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(orderStatus);`,
       `CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(createdAt);`,
       `CREATE INDEX IF NOT EXISTS idx_stock_addon ON stock(addonId);`,
@@ -760,6 +773,130 @@ class SQLiteService {
     }
   }
 
+  // Get flavors with their ingredient relationships
+  async getFlavorsWithIngredients(): Promise<any[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.query(`
+        SELECT 
+          f.id,
+          f.name,
+          f.createdAt,
+          fi.ingredientId,
+          fi.quantity as ingredientQuantity,
+          i.name as ingredientName,
+          i.measurementUnit
+        FROM flavors f
+        LEFT JOIN flavor_ingredients fi ON f.id = fi.flavorId
+        LEFT JOIN ingredients i ON fi.ingredientId = i.id
+        ORDER BY f.name, i.name
+      `);
+      
+      // Group the results by flavor
+      const flavorsMap = new Map();
+      
+      for (const row of result.values || []) {
+        if (!flavorsMap.has(row.id)) {
+          flavorsMap.set(row.id, {
+            id: row.id,
+            name: row.name,
+            createdAt: row.createdAt,
+            ingredients: []
+          });
+        }
+        
+        if (row.ingredientId) {
+          flavorsMap.get(row.id).ingredients.push({
+            id: row.ingredientId,
+            name: row.ingredientName,
+            measurementUnit: row.measurementUnit,
+            quantity: row.ingredientQuantity
+          });
+        }
+      }
+      
+      return Array.from(flavorsMap.values());
+    } catch (error) {
+      console.error('Error getting flavors with ingredients:', error);
+      return [];
+    }
+  }
+
+  // Add ingredient to flavor
+  async addFlavorIngredient(flavorId: string, ingredientId: string, quantity: number): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const id = this.generateUUID();
+      await this.db.run(
+        'INSERT OR REPLACE INTO flavor_ingredients (id, flavorId, ingredientId, quantity) VALUES (?, ?, ?, ?)',
+        [id, flavorId, ingredientId, quantity]
+      );
+      return true;
+    } catch (error) {
+      console.error('Error adding flavor ingredient:', error);
+      return false;
+    }
+  }
+
+  // Remove ingredient from flavor
+  async removeFlavorIngredient(flavorId: string, ingredientId: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run(
+        'DELETE FROM flavor_ingredients WHERE flavorId = ? AND ingredientId = ?',
+        [flavorId, ingredientId]
+      );
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error removing flavor ingredient:', error);
+      return false;
+    }
+  }
+
+  // Update flavor ingredient quantity
+  async updateFlavorIngredient(flavorId: string, ingredientId: string, quantity: number): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.run(
+        'UPDATE flavor_ingredients SET quantity = ? WHERE flavorId = ? AND ingredientId = ?',
+        [quantity, flavorId, ingredientId]
+      );
+      return (result.changes ?? 0) > 0;
+    } catch (error) {
+      console.error('Error updating flavor ingredient:', error);
+      return false;
+    }
+  }
+
+  // Get ingredients for a specific flavor
+  async getFlavorIngredients(flavorId: string): Promise<any[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      const result = await this.db.query(`
+        SELECT 
+          fi.quantity,
+          i.id,
+          i.name,
+          i.measurementUnit,
+          i.pricePerUnit
+        FROM flavor_ingredients fi
+        JOIN ingredients i ON fi.ingredientId = i.id
+        WHERE fi.flavorId = ?
+        ORDER BY i.name
+      `, [flavorId]);
+      
+      return result.values || [];
+    } catch (error) {
+      console.error('Error getting flavor ingredients:', error);
+      return [];
+    }
+  }
+
   // Update stock with upsert pattern - Android SQLite compatible
   async updateStock(itemType: 'addon' | 'ingredient' | 'material', itemId: string, quantity: number): Promise<boolean> {
     if (!this.db) throw new Error('Database not initialized');
@@ -968,15 +1105,23 @@ class SQLiteService {
   async calculateStockDeductions(items: any[]): Promise<Array<{type: string, id: string, quantityUsed: number}>> {
     const stockDeductions = [];
     
+    console.log(`🔍 Calculating stock deductions for ${items.length} items:`, JSON.stringify(items, null, 2));
+    
     for (const item of items) {
       const size = item.size;
+      const flavor = item.flavor;
       const quantity = item.quantity;
       
-      // Get ingredients needed for this size
-      if (size?.ingredients) {
-        for (const sizeIngredient of size.ingredients) {
-          const ingredientId = sizeIngredient.ingredient?.id || sizeIngredient.ingredientId;
-          const quantityUsed = sizeIngredient.quantityUsed * quantity;
+      console.log(`🔍 Processing item: product=${item.product?.name}, size=${size?.name}, flavor=${flavor?.name}, quantity=${quantity}`);
+      console.log(`🔍 Size materials:`, size?.materials);
+      console.log(`🔍 Item addons:`, item.addons);
+      
+      // Get ingredients needed for this flavor (NEW APPROACH)
+      if (flavor?.id) {
+        const flavorIngredients = await this.getFlavorIngredients(flavor.id);
+        for (const flavorIngredient of flavorIngredients) {
+          const ingredientId = flavorIngredient.id;
+          const quantityUsed = flavorIngredient.quantity * quantity;
           
           if (ingredientId && quantityUsed > 0) {
             stockDeductions.push({
@@ -988,7 +1133,7 @@ class SQLiteService {
         }
       }
       
-      // Get materials needed for this size
+      // Get materials needed for this size (materials still linked to size)
       if (size?.materials) {
         for (const sizeMaterial of size.materials) {
           const materialId = sizeMaterial.material?.id || sizeMaterial.materialId;
@@ -1021,7 +1166,7 @@ class SQLiteService {
       }
     }
     
-    console.log(`Calculated ${stockDeductions.length} stock deductions for order`);
+    console.log(`Calculated ${stockDeductions.length} stock deductions for order (flavor-based)`);
     return stockDeductions;
   }
 

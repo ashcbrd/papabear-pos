@@ -48,7 +48,6 @@ interface SizeInput {
   name: SizeName;
   price: number;
   materials: { id: string; quantity: number }[];
-  ingredients: { id: string; quantity: number }[];
 }
 
 interface ProductRow {
@@ -62,7 +61,6 @@ interface ProductRow {
     name: SizeName;
     price: number;
     materials: { material: Material; quantityUsed: number }[];
-    ingredients: { ingredient: Ingredient; quantityUsed: number }[];
   }[];
 }
 
@@ -89,7 +87,6 @@ export default function ProductsAdminPage() {
   const {
     products,
     materials,
-    ingredients,
     flavors: dynamicFlavors, // [{id,name}]
     createProduct,
     updateProduct,
@@ -114,7 +111,7 @@ export default function ProductsAdminPage() {
     const options = getSizeOptionsForCategory(category);
     if (options.length > 0 && sizes.length === 0) {
       setSizes([
-        { name: options[0], price: 0, materials: [], ingredients: [] },
+        { name: options[0], price: 0, materials: [] },
       ]);
     }
   }, [category, sizes.length]);
@@ -133,7 +130,6 @@ export default function ProductsAdminPage() {
                 name: [...options][0],
                 price: 0,
                 materials: [],
-                ingredients: [],
               },
             ]
       );
@@ -175,7 +171,6 @@ export default function ProductsAdminPage() {
           name: s.name,
           price: s.price,
           materials: s.materials,
-          ingredients: s.ingredients,
         })),
       };
 
@@ -220,10 +215,6 @@ export default function ProductsAdminPage() {
         materials: (s.materials || []).map((m: any) => ({
           id: m.material?.id ?? m.id,
           quantity: m.quantityUsed ?? m.quantity ?? 0,
-        })),
-        ingredients: (s.ingredients || []).map((i: any) => ({
-          id: i.ingredient?.id ?? i.id,
-          quantity: i.quantityUsed ?? i.quantity ?? 0,
         })),
       }))
     );
@@ -338,7 +329,7 @@ export default function ProductsAdminPage() {
 
       <AdminFormSection
         title={editingProductId ? "Edit Product" : "Create New Product"}
-        description="Add a new product with flavors, sizes, materials, and ingredients"
+        description="Add a new product with flavors, sizes, and materials (ingredients are managed per flavor)"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <AdminInput
@@ -428,7 +419,7 @@ export default function ProductsAdminPage() {
                   if (name) {
                     setSizes((prev) => [
                       ...prev,
-                      { name, price: 0, materials: [], ingredients: [] },
+                      { name, price: 0, materials: [] },
                     ]);
                   }
                 }}
@@ -445,7 +436,6 @@ export default function ProductsAdminPage() {
                 sizes={sizes}
                 setSizes={setSizes}
                 materials={materials}
-                ingredients={ingredients}
                 category={category}
               />
             ))}
@@ -549,7 +539,6 @@ function SizeEditor({
   sizes,
   setSizes,
   materials,
-  ingredients,
   category,
 }: {
   idx: number;
@@ -557,7 +546,6 @@ function SizeEditor({
   sizes: SizeInput[];
   setSizes: React.Dispatch<React.SetStateAction<SizeInput[]>>;
   materials: Material[];
-  ingredients: Ingredient[];
   category: Category;
 }) {
   const update = (s: SizeInput) =>
@@ -615,22 +603,22 @@ function SizeEditor({
           Inventory Tracking (Optional)
         </h5>
         <p className="text-xs text-gray-500 mb-4">
-          Add materials and ingredients used for this size to automatically
-          deduct stock when sold.
+          Add materials used for this size to automatically deduct stock when sold.
+          Ingredients are now managed per flavor in the Flavors admin page.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           <NestedSelectors
             title="Materials"
             items={size.materials}
             all={materials}
             onChange={(items) => update({ ...size, materials: items })}
           />
-          <NestedSelectors
-            title="Ingredients"
-            items={size.ingredients}
-            all={ingredients}
-            onChange={(items) => update({ ...size, ingredients: items })}
-          />
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-700">
+              <strong>Note:</strong> Ingredients are now managed per flavor in the Flavors admin page. 
+              Each flavor can have its own ingredient requirements and quantities.
+            </p>
+          </div>
         </div>
       </div>
     </AdminCard>
