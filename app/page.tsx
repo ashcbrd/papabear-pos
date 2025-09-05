@@ -14,9 +14,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-xl">🐻</span>
-              </div>
+              <img src="/papabear.jpg" alt="Bear Icon" className="w-10 h-10" />
+
               <div>
                 <h1 className="text-xl font-bold text-neutral-900">
                   Papa Bear Café
