@@ -17,9 +17,11 @@ import {
   Coffee,
   Zap,
   ArrowLeft,
+  Filter,
+  ChevronDown,
 } from "lucide-react";
 import OrderConfirmationDialog from "@/components/order-confirmation-dialog";
-import CustomSelect from "@/components/custom-select"; // keep if you use elsewhere
+import CustomSelect from "@/components/custom-select";
 import { useToast } from "@/components/toast-context";
 import { useData } from "@/lib/data-context";
 import { formatDate } from "@/lib/date-utils";
@@ -89,10 +91,13 @@ export default function ModernPOSPage() {
   const {
     products,
     addons,
+    materials,
+    ingredients,
     orders: allOrders,
     loadOrders,
     createOrder,
     updateOrder,
+    getFlavorIngredients,
     currentDataService,
   } = useData();
 
@@ -112,6 +117,13 @@ export default function ModernPOSPage() {
   const [selectedAddons, setSelectedAddons] = useState<OrderAddon[]>([]);
   const [isOrderPanelVisible, setIsOrderPanelVisible] = useState(false);
   const [isQueueVisible, setIsQueueVisible] = useState(false);
+  const [isStocksVisible, setIsStocksVisible] = useState(false);
+  const [stockFilter, setStockFilter] = useState<"all" | "good" | "low" | "out">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "Material" | "Ingredient" | "Add-on">("all");
+  const [selectedProductForStock, setSelectedProductForStock] = useState<any>(null);
+  const [selectedFlavorForStock, setSelectedFlavorForStock] = useState<any>(null);
+  const [selectedSizeForStock, setSelectedSizeForStock] = useState<any>(null);
+  const [productFilteredStockItems, setProductFilteredStockItems] = useState<any[]>([]);
   const [cashDrawerBalance, setCashDrawerBalance] = useState(0);
 
   const sizeSelectionRef = useRef<HTMLDivElement>(null);
@@ -142,6 +154,15 @@ export default function ModernPOSPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    // Update filtered stock items when product selection changes
+    const updateFilteredItems = async () => {
+      const filtered = await getFilteredStockItemsByProduct();
+      setProductFilteredStockItems(filtered);
+    };
+    updateFilteredItems();
+  }, [selectedProductForStock, selectedSizeForStock, selectedFlavorForStock]);
+
+  useEffect(() => {
     if (orderType) {
       loadOrders();
     }
@@ -157,6 +178,161 @@ export default function ModernPOSPage() {
       console.error("❌ Error loading cash drawer balance:", error);
     }
   }, [currentDataService]);
+
+  const getStockStatus = useCallback((currentStock: number, reorderPoint: number = 10) => {
+    if (currentStock === 0) return { status: 'out', label: 'Out of Stock', color: 'red' };
+    if (currentStock <= reorderPoint) return { status: 'low', label: 'Low Stock', color: 'yellow' };
+    return { status: 'good', label: 'Good Stock', color: 'green' };
+  }, []);
+
+  const getAllStockItems = useCallback(() => {
+    const stockItems = [];
+    
+    // Add materials
+    materials.forEach((material: any) => {
+      const currentStock = material.stock?.quantity || 0;
+      const stockInfo = getStockStatus(currentStock, 10);
+      stockItems.push({
+        id: material.id,
+        name: material.name,
+        type: 'Material',
+        currentStock: currentStock,
+        unit: material.measurementUnit || 'pcs',
+        status: stockInfo.status,
+        statusLabel: stockInfo.label,
+        statusColor: stockInfo.color
+      });
+    });
+
+    // Add ingredients
+    ingredients.forEach((ingredient: any) => {
+      const currentStock = ingredient.stock?.quantity || 0;
+      const stockInfo = getStockStatus(currentStock, 10);
+      stockItems.push({
+        id: ingredient.id,
+        name: ingredient.name,
+        type: 'Ingredient',
+        currentStock: currentStock,
+        unit: ingredient.measurementUnit || 'pcs',
+        status: stockInfo.status,
+        statusLabel: stockInfo.label,
+        statusColor: stockInfo.color
+      });
+    });
+
+    // Add addons
+    addons.forEach((addon: any) => {
+      const currentStock = addon.stock?.quantity || 0;
+      const stockInfo = getStockStatus(currentStock, 10);
+      stockItems.push({
+        id: addon.id,
+        name: addon.name,
+        type: 'Add-on',
+        currentStock: currentStock,
+        unit: addon.measurementUnit || 'pcs',
+        status: stockInfo.status,
+        statusLabel: stockInfo.label,
+        statusColor: stockInfo.color
+      });
+    });
+
+    return stockItems;
+  }, [materials, ingredients, addons, getStockStatus]);
+
+  const getFilteredStockItemsByProduct = useCallback(async () => {
+    if (!selectedProductForStock || !selectedSizeForStock) {
+      return getAllStockItems().filter(item => item.type !== 'Add-on'); // Remove addons when no product selected
+    }
+
+    const filteredItems = [];
+    
+    // Get materials used by the selected size
+    const sizeData = selectedSizeForStock;
+    
+    // Add materials used by this size
+    if (sizeData.materials) {
+      sizeData.materials.forEach((sizeMaterial: any) => {
+        const material = materials.find((m: any) => m.id === sizeMaterial.materialId);
+        if (material) {
+          const currentStock = material.stock?.quantity || 0;
+          const stockInfo = getStockStatus(currentStock, 10);
+          filteredItems.push({
+            id: material.id,
+            name: material.name,
+            type: 'Material',
+            currentStock: currentStock,
+            unit: material.measurementUnit || 'pcs',
+            quantityUsed: sizeMaterial.quantityUsed,
+            status: stockInfo.status,
+            statusLabel: stockInfo.label,
+            statusColor: stockInfo.color
+          });
+        }
+      });
+    }
+
+    // Add ingredients used by this size
+    if (sizeData.ingredients) {
+      sizeData.ingredients.forEach((sizeIngredient: any) => {
+        const ingredient = ingredients.find((i: any) => i.id === sizeIngredient.ingredientId);
+        if (ingredient) {
+          const currentStock = ingredient.stock?.quantity || 0;
+          const stockInfo = getStockStatus(currentStock, 10);
+          filteredItems.push({
+            id: ingredient.id,
+            name: ingredient.name,
+            type: 'Ingredient',
+            currentStock: currentStock,
+            unit: ingredient.measurementUnit || 'pcs',
+            quantityUsed: sizeIngredient.quantityUsed,
+            status: stockInfo.status,
+            statusLabel: stockInfo.label,
+            statusColor: stockInfo.color
+          });
+        }
+      });
+    }
+
+    // Add ingredients used by the selected flavor (if flavor is selected)
+    if (selectedFlavorForStock) {
+      try {
+        const flavorIngredients = await getFlavorIngredients(selectedFlavorForStock.id);
+        if (flavorIngredients && flavorIngredients.length > 0) {
+          flavorIngredients.forEach((flavorIngredient: any) => {
+            const ingredient = ingredients.find((i: any) => i.id === flavorIngredient.ingredientId);
+            if (ingredient) {
+              // Check if this ingredient is already added from size
+              const existingIndex = filteredItems.findIndex(item => item.id === ingredient.id);
+              const currentStock = ingredient.stock?.quantity || 0;
+              const stockInfo = getStockStatus(currentStock, 10);
+              
+              if (existingIndex >= 0) {
+                // Update existing ingredient with flavor quantity
+                filteredItems[existingIndex].quantityUsed += flavorIngredient.quantityUsed || 0;
+              } else {
+                // Add new ingredient from flavor
+                filteredItems.push({
+                  id: ingredient.id,
+                  name: ingredient.name,
+                  type: 'Ingredient',
+                  currentStock: currentStock,
+                  unit: ingredient.measurementUnit || 'pcs',
+                  quantityUsed: flavorIngredient.quantityUsed || 0,
+                  status: stockInfo.status,
+                  statusLabel: stockInfo.label,
+                  statusColor: stockInfo.color
+                });
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error getting flavor ingredients:', error);
+      }
+    }
+
+    return filteredItems;
+  }, [selectedProductForStock, selectedSizeForStock, selectedFlavorForStock, materials, ingredients, getStockStatus, getAllStockItems, getFlavorIngredients]);
 
   const handleProductClick = (product: ProductWithFlavorsAndSizes) => {
     setSelectedProduct(product);
@@ -465,6 +641,15 @@ export default function ModernPOSPage() {
               <span className="text-lg">📝</span>
               <span className="text-sm font-semibold text-blue-700">
                 Queue ({orders.length})
+              </span>
+            </button>
+            <button
+              onClick={() => setIsStocksVisible(!isStocksVisible)}
+              className="bg-orange-50 hover:bg-orange-100 border border-orange-200 px-3 py-1 rounded-lg flex items-center space-x-2 transition-colors"
+            >
+              <Package className="w-4 h-4 text-orange-600" />
+              <span className="text-sm font-semibold text-orange-700">
+                Stocks
               </span>
             </button>
             <div className="bg-green-50 border border-green-200 px-3 py-1 rounded-lg flex items-center space-x-2">
@@ -1644,6 +1829,391 @@ export default function ModernPOSPage() {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Stocks Modal */}
+      <div
+        className={`fixed inset-0 z-[9999] transform transition-transform duration-300 ${
+          isStocksVisible ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div
+          className="bg-black/50 backdrop-blur-sm absolute inset-0 z-0"
+          onClick={() => setIsStocksVisible(false)}
+        />
+        <div className="bg-white h-full w-full max-w-6xl ml-auto flex flex-col relative shadow-2xl">
+          <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-3">
+                📦 Stock Management
+              </h2>
+              <p className="text-sm text-neutral-600 mt-1">
+                Monitor inventory levels and stock status
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 rounded-full bg-orange-400 animate-pulse"></div>
+                <span className="text-sm font-medium text-neutral-600">
+                  Live Inventory
+                </span>
+              </div>
+              <button
+                onClick={() => setIsStocksVisible(false)}
+                className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-neutral-500" />
+              </button>
+            </div>
+          </div>
+
+          {/* Stock Filters */}
+          <div className="p-6 border-b border-neutral-200 bg-neutral-50">
+            <div className="space-y-4">
+              {/* Status Filters */}
+              <div>
+                <h3 className="text-sm font-medium text-neutral-700 mb-2">Filter by Status</h3>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setStockFilter("all")}
+                    className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                      stockFilter === "all"
+                        ? "bg-blue-100 text-blue-700 border border-blue-200"
+                        : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50"
+                    }`}
+                  >
+                    <Filter size={14} />
+                    All Status
+                  </button>
+                  <button
+                    onClick={() => setStockFilter("good")}
+                    className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                      stockFilter === "good"
+                        ? "bg-green-100 text-green-700 border border-green-200"
+                        : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50"
+                    }`}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                    Good Stock
+                  </button>
+                  <button
+                    onClick={() => setStockFilter("low")}
+                    className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                      stockFilter === "low"
+                        ? "bg-yellow-100 text-yellow-700 border border-yellow-200"
+                        : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50"
+                    }`}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                    Low Stock
+                  </button>
+                  <button
+                    onClick={() => setStockFilter("out")}
+                    className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                      stockFilter === "out"
+                        ? "bg-red-100 text-red-700 border border-red-200"
+                        : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50"
+                    }`}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                    Out of Stock
+                  </button>
+                </div>
+              </div>
+
+              {/* Type Filters */}
+              <div>
+                <h3 className="text-sm font-medium text-neutral-700 mb-2">Filter by Type</h3>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setTypeFilter("all")}
+                    className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                      typeFilter === "all"
+                        ? "bg-purple-100 text-purple-700 border border-purple-200"
+                        : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50"
+                    }`}
+                  >
+                    All Types ({getAllStockItems().length})
+                  </button>
+                  <button
+                    onClick={() => setTypeFilter("Material")}
+                    className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                      typeFilter === "Material"
+                        ? "bg-blue-100 text-blue-700 border border-blue-200"
+                        : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50"
+                    }`}
+                  >
+                    📦 Materials ({getAllStockItems().filter(item => item.type === 'Material').length})
+                  </button>
+                  <button
+                    onClick={() => setTypeFilter("Ingredient")}
+                    className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                      typeFilter === "Ingredient"
+                        ? "bg-green-100 text-green-700 border border-green-200"
+                        : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50"
+                    }`}
+                  >
+                    🥛 Ingredients ({getAllStockItems().filter(item => item.type === 'Ingredient').length})
+                  </button>
+                  <button
+                    onClick={() => setTypeFilter("Add-on")}
+                    className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors ${
+                      typeFilter === "Add-on"
+                        ? "bg-orange-100 text-orange-700 border border-orange-200"
+                        : "bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50"
+                    }`}
+                  >
+                    ➕ Add-ons ({getAllStockItems().filter(item => item.type === 'Add-on').length})
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Product Filter */}
+          <div className="p-6 border-b border-neutral-200 bg-blue-50">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-blue-800 mb-3">🔍 Filter by Product Usage</h3>
+                <p className="text-xs text-blue-700 mb-4">Select a product to see only the materials and ingredients it uses</p>
+              </div>
+
+              {/* Product Selection */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Product Dropdown */}
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-2">Product</label>
+                  <CustomSelect
+                    value={selectedProductForStock?.id || ""}
+                    options={[
+                      { label: "Select Product...", value: "" },
+                      ...products.map((product) => ({
+                        label: product.name,
+                        value: product.id
+                      }))
+                    ]}
+                    onChange={(value) => {
+                      const product = products.find(p => p.id === value);
+                      setSelectedProductForStock(product || null);
+                      setSelectedFlavorForStock(null);
+                      setSelectedSizeForStock(null);
+                    }}
+                    placeholder="Select Product..."
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Flavor Dropdown */}
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-2">Flavor</label>
+                  <CustomSelect
+                    value={selectedFlavorForStock?.id || ""}
+                    options={[
+                      { 
+                        label: !selectedProductForStock 
+                          ? "Select product first..." 
+                          : !selectedProductForStock.flavors?.length 
+                          ? "No flavors available" 
+                          : "Select Flavor...", 
+                        value: "" 
+                      },
+                      ...(selectedProductForStock?.flavors || []).map((flavor) => ({
+                        label: flavor.name,
+                        value: flavor.id
+                      }))
+                    ]}
+                    onChange={(value) => {
+                      const flavor = selectedProductForStock?.flavors?.find(f => f.id === value);
+                      setSelectedFlavorForStock(flavor || null);
+                    }}
+                    placeholder="Select Flavor..."
+                    disabled={!selectedProductForStock || !selectedProductForStock.flavors?.length}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Size Dropdown */}
+                <div>
+                  <label className="block text-xs font-medium text-neutral-700 mb-2">Size</label>
+                  <CustomSelect
+                    value={selectedSizeForStock?.id || ""}
+                    options={[
+                      { 
+                        label: !selectedProductForStock 
+                          ? "Select product first..." 
+                          : !selectedProductForStock.sizes?.length 
+                          ? "No sizes available" 
+                          : "Select Size...", 
+                        value: "" 
+                      },
+                      ...(selectedProductForStock?.sizes || []).map((size) => ({
+                        label: `${size.name} - ₱${size.price.toFixed(2)}`,
+                        value: size.id
+                      }))
+                    ]}
+                    onChange={(value) => {
+                      const size = selectedProductForStock?.sizes?.find(s => s.id === value);
+                      setSelectedSizeForStock(size || null);
+                    }}
+                    placeholder="Select Size..."
+                    disabled={!selectedProductForStock || !selectedProductForStock.sizes?.length}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
+              {/* Clear Button */}
+              {selectedProductForStock && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => {
+                      setSelectedProductForStock(null);
+                      setSelectedFlavorForStock(null);
+                      setSelectedSizeForStock(null);
+                    }}
+                    className="px-3 py-1.5 text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg transition-colors"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Stock Items */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {(() => {
+              // Use product filter if product and size are selected, otherwise use all items
+              const baseStockItems = selectedProductForStock && selectedSizeForStock 
+                ? productFilteredStockItems 
+                : getAllStockItems();
+
+              const filteredStockItems = baseStockItems.filter(item => 
+                (stockFilter === "all" || item.status === stockFilter) &&
+                (typeFilter === "all" || item.type === typeFilter)
+              );
+
+              return filteredStockItems.length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {filteredStockItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`card bg-white border-2 transition-all duration-300 ${
+                        item.status === 'out' 
+                          ? 'border-red-200 hover:border-red-300' 
+                          : item.status === 'low' 
+                          ? 'border-yellow-200 hover:border-yellow-300' 
+                          : 'border-green-200 hover:border-green-300'
+                      }`}
+                    >
+                      <div className={`p-4 border-b border-neutral-200 ${
+                        item.status === 'out' 
+                          ? 'bg-gradient-to-r from-red-50 to-red-50' 
+                          : item.status === 'low' 
+                          ? 'bg-gradient-to-r from-yellow-50 to-yellow-50' 
+                          : 'bg-gradient-to-r from-green-50 to-green-50'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-bold text-lg text-neutral-900">
+                              {item.name}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="badge badge-neutral text-xs">
+                                {item.type}
+                              </span>
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                item.status === 'out' 
+                                  ? 'bg-red-100 text-red-700' 
+                                  : item.status === 'low' 
+                                  ? 'bg-yellow-100 text-yellow-700' 
+                                  : 'bg-green-100 text-green-700'
+                              }`}>
+                                {item.statusLabel}
+                              </span>
+                            </div>
+                          </div>
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                            item.status === 'out' 
+                              ? 'bg-red-100' 
+                              : item.status === 'low' 
+                              ? 'bg-yellow-100' 
+                              : 'bg-green-100'
+                          }`}>
+                            <Package className={`w-6 h-6 ${
+                              item.status === 'out' 
+                                ? 'text-red-600' 
+                                : item.status === 'low' 
+                                ? 'text-yellow-600' 
+                                : 'text-green-600'
+                            }`} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 space-y-4">
+                        <div className="text-center space-y-3">
+                          <div>
+                            <span className="text-sm font-medium text-neutral-600">
+                              Current Stock
+                            </span>
+                            <div className="text-3xl font-bold text-neutral-900 mt-1">
+                              {item.currentStock} <span className="text-lg text-neutral-600">{item.unit}</span>
+                            </div>
+                          </div>
+                          
+                          {item.quantityUsed && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                              <span className="text-xs font-medium text-amber-700">
+                                Used per serving: {item.quantityUsed} {item.unit}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {item.status === 'out' && (
+                          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                              <span className="text-sm font-medium text-red-700">
+                                Action Required: Restock immediately
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {item.status === 'low' && (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                              <span className="text-sm font-medium text-yellow-700">
+                                Warning: Stock running low
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16">
+                  <div className="w-24 h-24 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-6">
+                    <Package size={48} className="text-neutral-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-neutral-700 mb-2">
+                    {stockFilter === "all" ? "No stock items found" : `No ${stockFilter} stock items`}
+                  </h3>
+                  <p className="text-neutral-500 max-w-sm mx-auto">
+                    {stockFilter === "all" 
+                      ? "No inventory items are currently available in the system." 
+                      : `There are no items with ${stockFilter} stock status.`}
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
