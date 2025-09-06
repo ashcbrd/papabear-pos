@@ -169,4 +169,5 @@ enum OrderStatus {
   QUEUING
   SERVED
   CANCELLED
+  WRONG
 }

@@ -19,6 +19,8 @@ import {
   ArrowLeft,
   Filter,
   ChevronDown,
+  XCircle,
+  AlertTriangle,
 } from "lucide-react";
 import OrderConfirmationDialog from "@/components/order-confirmation-dialog";
 import CustomSelect from "@/components/custom-select";
@@ -133,14 +135,17 @@ export default function ModernPOSPage() {
     any[]
   >([]);
   const [cashDrawerBalance, setCashDrawerBalance] = useState(0);
+  const [orderStatusFilter, setOrderStatusFilter] = useState<"QUEUING" | "SERVED" | "CANCELLED" | "WRONG">("QUEUING");
+  const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+  const [showWrongConfirm, setShowWrongConfirm] = useState<string | null>(null);
 
   const sizeSelectionRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
 
-  // Show only orders not served
-  const orders: Order[] = allOrders.filter(
-    (o: Order) => o.orderStatus !== "SERVED"
-  );
+  // Filter orders based on status filter
+  const orders: Order[] = allOrders.filter((o: Order) => {
+    return o.orderStatus === orderStatusFilter;
+  });
 
   const categories: (Category | "All")[] = [
     "All",
@@ -553,44 +558,20 @@ export default function ModernPOSPage() {
     };
 
     try {
+      console.log("🔄 Creating order with data:", orderData);
       let createdOrderId = editingOrderId;
       if (editingOrderId) {
+        console.log("📝 Updating existing order:", editingOrderId);
         await updateOrder(editingOrderId, orderData);
       } else {
+        console.log("➕ Creating new order...");
         const newOrder = await createOrder(orderData);
         createdOrderId = newOrder.id;
+        console.log("✅ New order created with ID:", createdOrderId);
       }
 
-      // Record cash deposit for the payment (net amount after change)
-      try {
-        if (paid > 0) {
-          const netAmount = paid - change; // Amount actually staying in cash drawer
-
-          console.log("Recording cash deposit:", {
-            paidAmount: paid,
-            changeGiven: change,
-            netAmount: netAmount,
-            orderId: createdOrderId,
-            description: `Order #${(createdOrderId || "").slice(
-              -6
-            )} - ${orderType}`,
-          });
-
-          await currentDataService.addCashDeposit(
-            netAmount,
-            `Order #${(createdOrderId || "").slice(-6)} - ${orderType}${
-              change > 0
-                ? ` (Paid: ₱${paid.toFixed(2)}, Change: ₱${change.toFixed(2)})`
-                : ""
-            }`
-          );
-
-          console.log("✅ Cash deposit recorded successfully");
-        }
-      } catch (err) {
-        console.error("❌ Cash deposit failed:", err);
-        showToast("Order saved, but cash flow update failed.", "warning");
-      }
+      // Cash flow transaction is now automatically handled by the createOrder service
+      console.log("💰 Cash flow transaction handled automatically by order creation service");
 
       showToast(editingOrderId ? "Order updated." : "Order placed.", "success");
 
@@ -620,6 +601,155 @@ export default function ModernPOSPage() {
     } catch (error) {
       showToast("Failed to serve order.", "error");
       console.error("Serve order error:", error);
+    }
+  };
+
+  const refundOrderStock = async (order: Order) => {
+    if (!order.items) return;
+
+    try {
+      for (const item of order.items) {
+        const quantity = item.quantity;
+
+        // Refund stock for materials
+        if (item.size?.materials) {
+          for (const sizeMaterial of item.size.materials) {
+            const materialId = sizeMaterial.materialId || sizeMaterial.material?.id;
+            const quantityUsed = (sizeMaterial.quantityUsed || 0) * quantity;
+            
+            if (materialId && quantityUsed > 0) {
+              const material = materials.find((m: any) => m.id === materialId);
+              if (material?.stock?.id) {
+                await currentDataService.updateStock(material.stock.id, 
+                  (material.stock.quantity || 0) + quantityUsed);
+              }
+            }
+          }
+        }
+
+        // Refund stock for ingredients (from size)
+        if (item.size?.ingredients) {
+          for (const sizeIngredient of item.size.ingredients) {
+            const ingredientId = sizeIngredient.ingredientId || sizeIngredient.ingredient?.id;
+            const quantityUsed = (sizeIngredient.quantityUsed || 0) * quantity;
+            
+            if (ingredientId && quantityUsed > 0) {
+              const ingredient = ingredients.find((i: any) => i.id === ingredientId);
+              if (ingredient?.stock?.id) {
+                await currentDataService.updateStock(ingredient.stock.id,
+                  (ingredient.stock.quantity || 0) + quantityUsed);
+              }
+            }
+          }
+        }
+
+        // Refund stock for flavor ingredients
+        if (item.flavor?.id) {
+          try {
+            const flavorIngredients = await getFlavorIngredients(item.flavor.id);
+            for (const flavorIngredient of flavorIngredients) {
+              const ingredientId = flavorIngredient.id;
+              const quantityUsed = (flavorIngredient.quantity || 0) * quantity;
+              
+              if (ingredientId && quantityUsed > 0) {
+                const ingredient = ingredients.find((i: any) => i.id === ingredientId);
+                if (ingredient?.stock?.id) {
+                  await currentDataService.updateStock(ingredient.stock.id,
+                    (ingredient.stock.quantity || 0) + quantityUsed);
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error refunding flavor ingredients:", error);
+          }
+        }
+
+        // Refund stock for addons
+        if (item.addons) {
+          for (const addon of item.addons) {
+            const addonId = addon.addon?.id;
+            const addonQuantity = addon.quantity || 0;
+            
+            if (addonId && addonQuantity > 0) {
+              const addonItem = addons.find((a: any) => a.id === addonId);
+              if (addonItem?.stock?.id) {
+                await currentDataService.updateStock(addonItem.stock.id,
+                  (addonItem.stock.quantity || 0) + addonQuantity);
+              }
+            }
+          }
+        }
+      }
+      console.log("Stock refunded successfully for order:", order.id);
+    } catch (error) {
+      console.error("Error refunding stock for order:", error);
+      throw error;
+    }
+  };
+
+  const handleCancelOrder = async (order: Order, reason: string = "Order cancelled by customer") => {
+    try {
+      // Update order status to CANCELLED
+      await updateOrder(order.id, { orderStatus: "CANCELLED" });
+      
+      // Refund stock
+      await refundOrderStock(order);
+      
+      // Record cash expense for refund
+      const refundAmount = order.total || 0;
+      if (refundAmount > 0) {
+        await currentDataService.recordExpense(
+          refundAmount,
+          `Order #${order.id.slice(-6)} cancellation refund - ${reason}`
+        );
+      }
+
+      await loadOrders();
+      await loadCashDrawerBalance();
+      showToast("Order cancelled and refunded successfully.", "success");
+    } catch (error) {
+      showToast("Failed to cancel order.", "error");
+      console.error("Cancel order error:", error);
+    }
+  };
+
+  const handleWrongOrder = async (order: Order, reason: string = "Wrong order marked by staff") => {
+    try {
+      console.log("🔄 Starting wrong order process for:", order.id);
+      
+      // Update order status to WRONG
+      console.log("📝 Updating order status to WRONG...");
+      await updateOrder(order.id, { orderStatus: "WRONG" });
+      console.log("✅ Order status updated successfully");
+      
+      // Refund payment but NOT stock (ingredients/materials already used)
+      const refundAmount = order.total || 0;
+      console.log("💰 Refund amount:", refundAmount);
+      
+      if (refundAmount > 0) {
+        console.log("💸 Recording expense for refund...");
+        await currentDataService.recordExpense(
+          refundAmount,
+          `Order #${order.id.slice(-6)} wrong order refund - ${reason}`
+        );
+        console.log("✅ Expense recorded successfully");
+      }
+
+      console.log("🔄 Refreshing orders and cash balance...");
+      await loadOrders();
+      await loadCashDrawerBalance();
+      
+      console.log("✅ Wrong order process completed successfully");
+      showToast("Order marked as wrong and payment refunded.", "success");
+    } catch (error) {
+      console.error("❌ Wrong order error details:", {
+        error: error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        orderId: order.id,
+        orderTotal: order.total
+      });
+      showToast("Failed to mark order as wrong. Check console for details.", "error");
     }
   };
 
@@ -831,29 +961,58 @@ export default function ModernPOSPage() {
             onClick={() => setIsQueueVisible(false)}
           />
           <div className="bg-white h-full w-full max-w-6xl ml-auto flex flex-col relative shadow-2xl">
-            <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-3">
-                  📝 Queue Orders
-                </h2>
-                <p className="text-sm text-neutral-600 mt-1">
-                  {orders.length} order{orders.length !== 1 ? "s" : ""} waiting
-                  to be served
-                </p>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
-                  <span className="text-sm font-medium text-neutral-600">
-                    Live Updates
-                  </span>
+            <div className="p-6 border-b border-neutral-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-3">
+                    📝 Order Management
+                  </h2>
+                  <p className="text-sm text-neutral-600 mt-1">
+                    {allOrders.length} total orders • {orders.length} showing
+                  </p>
                 </div>
-                <button
-                  onClick={() => setIsQueueVisible(false)}
-                  className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
-                >
-                  <X size={20} className="text-neutral-500" />
-                </button>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
+                    <span className="text-sm font-medium text-neutral-600">
+                      Live Updates
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setIsQueueVisible(false)}
+                    className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
+                  >
+                    <X size={20} className="text-neutral-500" />
+                  </button>
+                </div>
+              </div>
+              
+              {/* Order Status Filter */}
+              <div className="flex flex-wrap gap-2">
+                {["QUEUING", "SERVED", "CANCELLED", "WRONG"].map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setOrderStatusFilter(status as typeof orderStatusFilter)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      orderStatusFilter === status
+                        ? status === "CANCELLED" || status === "WRONG"
+                          ? "bg-red-100 text-red-700 border-red-200"
+                          : status === "SERVED"
+                          ? "bg-green-100 text-green-700 border-green-200"
+                          : "bg-blue-100 text-blue-700 border-blue-200"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    } border`}
+                  >
+                    {status === "QUEUING"
+                      ? `Queuing (${allOrders.filter(o => o.orderStatus === "QUEUING").length})`
+                      : status === "SERVED" 
+                      ? `Served (${allOrders.filter(o => o.orderStatus === "SERVED").length})`
+                      : status === "CANCELLED"
+                      ? `Cancelled (${allOrders.filter(o => o.orderStatus === "CANCELLED").length})`
+                      : `Wrong (${allOrders.filter(o => o.orderStatus === "WRONG").length})`
+                    }
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -865,7 +1024,17 @@ export default function ModernPOSPage() {
                       key={order.id}
                       className="card card-hover bg-white border-2 border-transparent hover:border-green-200 transition-all duration-300"
                     >
-                      <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-green-50 to-emerald-50">
+                      <div className={`p-4 border-b border-neutral-200 bg-gradient-to-r ${
+                        order.orderStatus === "QUEUING" 
+                          ? "from-blue-50 to-blue-50"
+                          : order.orderStatus === "SERVED"
+                          ? "from-green-50 to-emerald-50"
+                          : order.orderStatus === "CANCELLED"
+                          ? "from-red-50 to-red-50"
+                          : order.orderStatus === "WRONG"
+                          ? "from-orange-50 to-orange-50"
+                          : "from-gray-50 to-gray-50"
+                      }`}>
                         <div className="flex items-center justify-between">
                           <div>
                             <span className="font-bold text-lg text-neutral-900">
@@ -875,6 +1044,19 @@ export default function ModernPOSPage() {
                               <span className="badge badge-primary text-xs">
                                 {formatOrderType(order.orderType)}
                               </span>
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                order.orderStatus === "QUEUING" 
+                                  ? "bg-blue-100 text-blue-700"
+                                  : order.orderStatus === "SERVED"
+                                  ? "bg-green-100 text-green-700"
+                                  : order.orderStatus === "CANCELLED"
+                                  ? "bg-red-100 text-red-700"
+                                  : order.orderStatus === "WRONG"
+                                  ? "bg-orange-100 text-orange-700"
+                                  : "bg-gray-100 text-gray-700"
+                              }`}>
+                                {order.orderStatus}
+                              </span>
                               <span className="text-xs text-neutral-500">
                                 {new Date(
                                   order.createdAt || Date.now()
@@ -882,8 +1064,29 @@ export default function ModernPOSPage() {
                               </span>
                             </div>
                           </div>
-                          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                            <span className="text-lg">🍽️</span>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            order.orderStatus === "QUEUING" 
+                              ? "bg-blue-100"
+                              : order.orderStatus === "SERVED"
+                              ? "bg-green-100"
+                              : order.orderStatus === "CANCELLED"
+                              ? "bg-red-100"
+                              : order.orderStatus === "WRONG"
+                              ? "bg-orange-100"
+                              : "bg-gray-100"
+                          }`}>
+                            <span className="text-lg">
+                              {order.orderStatus === "QUEUING" 
+                                ? "⏳"
+                                : order.orderStatus === "SERVED"
+                                ? "🍽️"
+                                : order.orderStatus === "CANCELLED"
+                                ? "❌"
+                                : order.orderStatus === "WRONG"
+                                ? "⚠️"
+                                : "❓"
+                              }
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -940,13 +1143,54 @@ export default function ModernPOSPage() {
                             ₱{order.total?.toFixed(2) || "0.00"}
                           </span>
                         </div>
-                        <LongPressServeButton
-                          onConfirm={() => handleServe(order.id)}
-                          idleLabel="Serve Order"
-                          confirmingLabel="Hold to Confirm"
-                          successLabel="Served!"
-                          holdMs={1000}
-                        />
+                        
+                        {order.orderStatus === "QUEUING" && (
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <LongPressServeButton
+                                onConfirm={() => handleServe(order.id)}
+                                idleLabel="Serve Order"
+                                confirmingLabel="Hold to Confirm"
+                                successLabel="Served!"
+                                holdMs={1000}
+                              />
+                            </div>
+                            <button
+                              onClick={() => setShowCancelConfirm(order.id)}
+                              className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1"
+                            >
+                              <XCircle size={12} />
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                        
+                        {order.orderStatus === "SERVED" && (
+                          <div className="space-y-2">
+                            <div className="text-center text-green-600 font-medium py-2">
+                              ✅ Order Completed
+                            </div>
+                            <button
+                              onClick={() => setShowWrongConfirm(order.id)}
+                              className="w-full py-2 px-3 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                            >
+                              <AlertTriangle size={14} />
+                              Mark as Wrong Order
+                            </button>
+                          </div>
+                        )}
+                        
+                        {order.orderStatus === "CANCELLED" && (
+                          <div className="text-center text-red-600 font-medium py-2">
+                            ❌ Order Cancelled & Refunded
+                          </div>
+                        )}
+                        
+                        {order.orderStatus === "WRONG" && (
+                          <div className="text-center text-orange-600 font-medium py-2">
+                            ⚠️ Wrong Order - Payment Refunded
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1732,154 +1976,7 @@ export default function ModernPOSPage() {
         <div>Order details would go here</div>
       </OrderConfirmationDialog>
 
-      {/* Queue overlay while in POS */}
-      <div
-        className={`fixed inset-0 z-50 transform transition-transform duration-300 ${
-          isQueueVisible ? "translate-x-0" : "translate-x-full"
-        }`}
-      >
-        <div
-          className="bg-black/50 backdrop-blur-sm absolute inset-0 z-0"
-          onClick={() => setIsQueueVisible(false)}
-        />
-        <div className="bg-white h-full w-full max-w-6xl ml-auto flex flex-col relative shadow-2xl">
-          <div className="p-6 border-b border-neutral-200 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-3">
-                📝 Queue Orders
-              </h2>
-              <p className="text-sm text-neutral-600 mt-1">
-                {orders.length} order{orders.length !== 1 ? "s" : ""} waiting to
-                be served
-              </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
-                <span className="text-sm font-medium text-neutral-600">
-                  Live Updates
-                </span>
-              </div>
-              <button
-                onClick={() => setIsQueueVisible(false)}
-                className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
-              >
-                <X size={20} className="text-neutral-500" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6">
-            {orders.length > 0 ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {orders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="card card-hover bg-white border-2 border-transparent hover:border-green-200 transition-all duration-300"
-                  >
-                    <div className="p-4 border-b border-neutral-200 bg-gradient-to-r from-green-50 to-emerald-50">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="font-bold text-lg text-neutral-900">
-                            #{order.id.slice(0, 6)}
-                          </span>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="badge badge-primary text-xs">
-                              {formatOrderType(order.orderType)}
-                            </span>
-                            <span className="text-xs text-neutral-500">
-                              {new Date(
-                                order.createdAt || Date.now()
-                              ).toLocaleTimeString()}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                          <span className="text-lg">🍽️</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
-                      {order.items?.map((item, index) => (
-                        <div
-                          key={index}
-                          className="bg-neutral-50 rounded-lg p-3"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-sm text-neutral-900">
-                                {item.product?.name || "Unknown Product"}
-                              </h4>
-                              <div className="flex gap-1 mt-1">
-                                <span className="badge badge-neutral text-xs">
-                                  {item.flavor?.name || "Unknown Flavor"}
-                                </span>
-                                <span className="badge badge-success text-xs">
-                                  {item.size?.name || "Unknown Size"}
-                                </span>
-                              </div>
-                              {item.addons?.length > 0 && (
-                                <div className="flex gap-1 mt-2 flex-wrap">
-                                  {item.addons.map((a, addonIndex) => (
-                                    <span
-                                      key={a.addon?.id || addonIndex}
-                                      className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded-full"
-                                    >
-                                      +{a.addon?.name || "Unknown Addon"} x
-                                      {a.quantity}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-right">
-                              <span className="font-bold text-sm text-neutral-900">
-                                x{item.quantity}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )) || []}
-                    </div>
-
-                    <div className="p-4 border-t border-neutral-200 bg-neutral-50">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-medium text-neutral-600">
-                          Total Amount
-                        </span>
-                        <span className="font-bold text-lg text-green-600">
-                          ₱{order.total?.toFixed(2) || "0.00"}
-                        </span>
-                      </div>
-                      <LongPressServeButton
-                        onConfirm={() => handleServe(order.id)}
-                        idleLabel="Serve Order"
-                        confirmingLabel="Hold to Confirm"
-                        successLabel="Served!"
-                        holdMs={1000}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16">
-                <div className="w-24 h-24 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-6">
-                  <span className="text-4xl">🍽️</span>
-                </div>
-                <h3 className="text-xl font-semibold text-neutral-700 mb-2">
-                  No orders in queue
-                </h3>
-                <p className="text-neutral-500 max-w-sm mx-auto">
-                  New orders will appear here automatically when customers place
-                  them.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* This queue overlay is handled by the main one above */}
 
       {/* Stocks Modal */}
       <div
@@ -2136,6 +2233,82 @@ export default function ModernPOSPage() {
           </div>
         </div>
       </div>
+
+      {/* Cancel Order Confirmation Popup */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <XCircle size={32} className="text-red-500" />
+              </div>
+              <h3 className="text-xl font-bold text-neutral-900 mb-2">
+                Cancel Order
+              </h3>
+              <p className="text-neutral-600 mb-6">
+                Are you sure you want to cancel order #{showCancelConfirm.slice(0, 6)}? 
+                This will refund the payment and restore all used stock items.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCancelConfirm(null)}
+                  className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium transition-colors"
+                >
+                  Keep Order
+                </button>
+                <button
+                  onClick={() => {
+                    const order = allOrders.find(o => o.id === showCancelConfirm);
+                    if (order) handleCancelOrder(order);
+                    setShowCancelConfirm(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors"
+                >
+                  Cancel Order
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark Wrong Order Confirmation Popup */}
+      {showWrongConfirm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={32} className="text-orange-500" />
+              </div>
+              <h3 className="text-xl font-bold text-neutral-900 mb-2">
+                Mark as Wrong Order
+              </h3>
+              <p className="text-neutral-600 mb-6">
+                Are you sure this order #{showWrongConfirm.slice(0, 6)} was prepared incorrectly? 
+                This will refund the payment but NOT restore stock items.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowWrongConfirm(null)}
+                  className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium transition-colors"
+                >
+                  Keep Order
+                </button>
+                <button
+                  onClick={() => {
+                    const order = allOrders.find(o => o.id === showWrongConfirm);
+                    if (order) handleWrongOrder(order);
+                    setShowWrongConfirm(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors"
+                >
+                  Mark Wrong
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

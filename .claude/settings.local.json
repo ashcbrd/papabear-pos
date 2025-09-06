@@ -85,7 +85,8 @@
       "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\components/**)",
       "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\components/**)",
       "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\components/**)",
-      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\components/**)"
+      "Read(/C:\\Users\\PC\\Desktop\\Development\\PAPA BEAR\\papabear-pos\\components/**)",
+      "Bash(printf '\\n')"
     ],
     "deny": [],
     "ask": []

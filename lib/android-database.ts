@@ -53,6 +53,7 @@ export interface DatabaseService {
     description: string,
     itemsPurchased?: string
   ) => Promise<any>;
+  clearAllCashFlowTransactions: () => Promise<boolean>;
   setCashDrawerBalance: (newBalance: number, reason: string) => Promise<any>;
   recordCashInflow: (inflowData: {
     amount: number;
@@ -1944,12 +1945,13 @@ class AndroidDatabaseService implements DatabaseService {
   // CASH FLOW (unified keys, outflows positive)
   // =========================================================
 
-  async getCashFlowTransactions(): Promise<any[]> {
+  async getCashFlowTransactions(filters?: any): Promise<any[]> {
     if (!this.isInitialized) await this.initializeDatabase();
 
     try {
       if (Capacitor.isNativePlatform()) {
-        const tx = await sqliteService.getAllCashFlowTransactions();
+        const limit = filters?.limit || undefined;
+        const tx = await sqliteService.getAllCashFlowTransactions(limit);
         // Ensure opening balance exists
         if (!tx.some((t: any) => t.description === "Opening cash drawer")) {
           await sqliteService.createCashFlowTransaction(
@@ -1958,11 +1960,9 @@ class AndroidDatabaseService implements DatabaseService {
             "CASH_DEPOSIT",
             "Opening cash drawer"
           );
-          return await sqliteService.getAllCashFlowTransactions();
+          return await sqliteService.getAllCashFlowTransactions(limit);
         }
-        return tx.sort(
-          (a: any, b: any) => +new Date(b.createdAt) - +new Date(a.createdAt)
-        );
+        return tx; // Already sorted in SQLite query
       } else {
         let tx = this.getFromWebStorage<any[]>(this.CASH_TX_KEY);
         // seed opening cash once
@@ -2311,6 +2311,29 @@ class AndroidDatabaseService implements DatabaseService {
     }
 
     return transaction;
+  }
+
+  async clearAllCashFlowTransactions(): Promise<boolean> {
+    if (!this.isInitialized) await this.initializeDatabase();
+
+    try {
+      if (Capacitor.isNativePlatform()) {
+        return await sqliteService.clearAllCashFlowTransactions();
+      } else {
+        // Clear web storage
+        this.setToWebStorage(this.CASH_TX_KEY, []);
+        // Reset cash drawer balance to 0
+        this.setToWebStorage(this.DRAWER_KEY, {
+          currentBalance: 0,
+          lastUpdated: new Date().toISOString(),
+        });
+        console.log('🧹 Web storage cash flow transactions cleared');
+        return true;
+      }
+    } catch (error) {
+      console.error('Error clearing cash flow transactions:', error);
+      return false;
+    }
   }
 }
 

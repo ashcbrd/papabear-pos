@@ -82,6 +82,7 @@ interface DataContextType {
   recordExpense: (amount: number, description: string, itemsPurchased?: string) => Promise<any>;
   recordRefund: (orderId: string, amount: number, reason: string) => Promise<any>;
   setCashDrawerBalance: (newBalance: number, reason: string) => Promise<any>;
+  clearAllCashFlowTransactions: () => Promise<boolean>;
   adjustCashDrawer: (adjustment: number, reason: string) => Promise<any>;
   
   // Direct access to current data service
@@ -518,6 +519,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     recordRefund: currentDataService.recordRefund,
     setCashDrawerBalance: currentDataService.setCashDrawerBalance,
     adjustCashDrawer: currentDataService.adjustCashDrawer,
+    clearAllCashFlowTransactions: currentDataService.clearAllCashFlowTransactions,
     
     // Direct access to current data service
     currentDataService

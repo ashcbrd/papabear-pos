@@ -82,6 +82,10 @@ class SQLiteService {
       // Handle migration for ingredients table
       log('Migrating ingredients table...');
       await this.migrateIngredientsTable();
+      
+      // Handle migration for order status
+      log('Migrating order status constraints...');
+      await this.migrateOrderStatus();
       log('Ingredients migration completed');
       
       // Force verification of ingredients table schema
@@ -167,6 +171,62 @@ class SQLiteService {
       }
     } catch (error) {
       logError('Failed to migrate ingredients table', error);
+    }
+  }
+
+  private async migrateOrderStatus(): Promise<void> {
+    if (!this.db) return;
+    
+    try {
+      log('Checking order status constraint...');
+      
+      // Check if we can insert a WRONG status order (test the constraint)
+      const testId = 'test-wrong-status-' + Date.now();
+      try {
+        await this.db.execute(`
+          INSERT INTO orders (id, total, paid, change, orderType, orderStatus, items) 
+          VALUES (?, 0, 0, 0, 'DINE_IN', 'WRONG', '[]')
+        `, [testId]);
+        
+        // If successful, delete the test order and we're done
+        await this.db.execute('DELETE FROM orders WHERE id = ?', [testId]);
+        log('Order status constraint already supports WRONG status');
+        return;
+      } catch (testError) {
+        log('WRONG status not supported, migrating constraint...');
+        
+        // Need to recreate the orders table with updated constraint
+        // First, rename existing table
+        await this.db.execute('ALTER TABLE orders RENAME TO orders_old');
+        
+        // Create new table with WRONG status support
+        await this.db.execute(`
+          CREATE TABLE orders (
+            id TEXT PRIMARY KEY,
+            total REAL NOT NULL CHECK(total >= 0),
+            paid REAL NOT NULL CHECK(paid >= 0),
+            change REAL NOT NULL DEFAULT 0,
+            orderType TEXT NOT NULL DEFAULT 'DINE_IN' CHECK(orderType IN ('DINE_IN', 'TAKE_OUT')),
+            orderStatus TEXT NOT NULL DEFAULT 'QUEUING' CHECK(orderStatus IN ('QUEUING', 'PREPARING', 'READY', 'SERVED', 'CANCELLED', 'WRONG')),
+            items TEXT NOT NULL DEFAULT '[]',
+            createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+          )
+        `);
+        
+        // Copy data from old table, ensuring compatibility
+        await this.db.execute(`
+          INSERT INTO orders (id, total, paid, change, orderType, orderStatus, items, createdAt)
+          SELECT id, total, paid, change, orderType, orderStatus, items, createdAt
+          FROM orders_old
+        `);
+        
+        // Drop old table
+        await this.db.execute('DROP TABLE orders_old');
+        
+        log('✅ Successfully migrated orders table with WRONG status support');
+      }
+    } catch (error) {
+      logError('Failed to migrate order status', error);
     }
   }
 
@@ -336,7 +396,7 @@ class SQLiteService {
         paid REAL NOT NULL CHECK(paid >= 0),
         change REAL NOT NULL DEFAULT 0,
         orderType TEXT NOT NULL DEFAULT 'DINE_IN' CHECK(orderType IN ('DINE_IN', 'TAKE_OUT')),
-        orderStatus TEXT NOT NULL DEFAULT 'QUEUING' CHECK(orderStatus IN ('QUEUING', 'PREPARING', 'READY', 'SERVED', 'CANCELLED')),
+        orderStatus TEXT NOT NULL DEFAULT 'QUEUING' CHECK(orderStatus IN ('QUEUING', 'PREPARING', 'READY', 'SERVED', 'CANCELLED', 'WRONG')),
         items TEXT NOT NULL DEFAULT '[]',
         createdAt TEXT NOT NULL DEFAULT (datetime('now'))
       );`,
@@ -965,15 +1025,16 @@ class SQLiteService {
   }
 
   // Cash Flow Methods
-  async createCashFlowTransaction(type: 'INFLOW' | 'OUTFLOW', amount: number, category: string, description: string, itemsPurchased?: string): Promise<string | null> {
+  async createCashFlowTransaction(type: 'INFLOW' | 'OUTFLOW', amount: number, category: string, description: string, itemsPurchased?: string, orderId?: string): Promise<string | null> {
     if (!this.db) throw new Error('Database not initialized');
     
     try {
       const id = this.generateUUID();
       await this.db.run(
-        'INSERT INTO cash_flow_transactions (id, type, amount, category, description, itemsPurchased) VALUES (?, ?, ?, ?, ?, ?)',
-        [id, type, amount, category, description, itemsPurchased || null]
+        'INSERT INTO cash_flow_transactions (id, type, amount, category, description, itemsPurchased, orderId, createdAt, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, datetime("now"), ?)',
+        [id, type, amount, category, description, itemsPurchased || null, orderId || null, 'admin']
       );
+      console.log(`✅ Cash flow transaction created: ${type} ${amount} for ${category}`);
       return id;
     } catch (error) {
       console.error('Error creating cash flow transaction:', error);
@@ -981,15 +1042,38 @@ class SQLiteService {
     }
   }
 
-  async getAllCashFlowTransactions(): Promise<any[]> {
+  async getAllCashFlowTransactions(limit?: number): Promise<any[]> {
     if (!this.db) throw new Error('Database not initialized');
     
     try {
-      const result = await this.db.query('SELECT * FROM cash_flow_transactions ORDER BY createdAt DESC');
-      return result.values || [];
+      let query = 'SELECT * FROM cash_flow_transactions ORDER BY createdAt DESC';
+      const params: any[] = [];
+      
+      if (limit) {
+        query += ' LIMIT ?';
+        params.push(limit);
+      }
+      
+      const result = await this.db.query(query, params);
+      const transactions = result.values || [];
+      console.log(`📊 Retrieved ${transactions.length} cash flow transactions`);
+      return transactions;
     } catch (error) {
       console.error('Error getting cash flow transactions:', error);
       return [];
+    }
+  }
+
+  async clearAllCashFlowTransactions(): Promise<boolean> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    try {
+      await this.db.run('DELETE FROM cash_flow_transactions');
+      console.log('🧹 All cash flow transactions cleared');
+      return true;
+    } catch (error) {
+      console.error('Error clearing cash flow transactions:', error);
+      return false;
     }
   }
 
@@ -1094,7 +1178,32 @@ class SQLiteService {
         [id, orderData.total, orderData.paid, orderData.change, orderData.orderType, orderData.orderStatus || 'QUEUING', JSON.stringify(orderData.items || [])]
       );
       
-      console.log('Order created successfully with stock deductions applied');
+      // Create cash flow transaction for the order payment (net amount after change)
+      if (orderData.paid && orderData.paid > 0) {
+        const netAmount = orderData.paid - (orderData.change || 0); // Amount actually staying in drawer
+        const productsList = (orderData.items || []).map((item: any) => 
+          `${item.quantity}x ${item.product?.name || 'Unknown'} (${item.flavor?.name || 'Default'} - ${item.size?.name || 'Regular'})`
+        ).join(', ');
+        
+        const description = `Order #${id.slice(-6)} - ${orderData.orderType || 'DINE_IN'}${
+          orderData.change > 0 
+            ? ` (Paid: ₱${orderData.paid.toFixed(2)}, Change: ₱${orderData.change.toFixed(2)})`
+            : ''
+        }`;
+        
+        await this.createCashFlowTransaction(
+          'INFLOW',
+          netAmount,
+          'ORDER_PAYMENT',
+          description,
+          productsList,
+          id
+        );
+        
+        console.log(`💰 Cash flow recorded: Net ₱${netAmount.toFixed(2)} from order (Paid: ₱${orderData.paid.toFixed(2)}, Change: ₱${(orderData.change || 0).toFixed(2)})`);
+      }
+      
+      console.log('Order created successfully with stock deductions and cash flow transaction');
       return id;
     } catch (error) {
       console.error('Error creating order:', error);

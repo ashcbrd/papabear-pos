@@ -78,6 +78,7 @@ export default function CashFlowManager() {
   const [undoTransaction, setUndoTransaction] = useState<any | null>(null);
   const [undoCountdown, setUndoCountdown] = useState(0);
 
+
   useEffect(() => {
     loadCashFlowData();
   }, [selectedPeriod]);
@@ -99,17 +100,25 @@ export default function CashFlowManager() {
   const loadCashFlowData = async () => {
     setLoading(true);
     try {
+      console.log("📊 Loading cash flow data...");
       const [transactionsData, summaryData, balanceData] = await Promise.all([
         currentDataService.getCashFlowTransactions({ limit: 50 }),
         currentDataService.getCashFlowSummary(selectedPeriod),
         currentDataService.getCashDrawerBalance(),
       ]);
 
+      console.log("💰 Cash flow data loaded:", {
+        transactionCount: transactionsData.length,
+        transactions: transactionsData.slice(0, 3), // Show first 3 for debugging
+        summary: summaryData,
+        balance: balanceData.currentBalance
+      });
+
       setTransactions(transactionsData);
       setSummary(summaryData);
       setDrawerBalance(balanceData.currentBalance);
     } catch (error) {
-      console.error("Error loading cash flow data:", error);
+      console.error("❌ Error loading cash flow data:", error);
     } finally {
       setLoading(false);
     }
@@ -182,6 +191,7 @@ export default function CashFlowManager() {
     setAdjustmentReason("");
     setShowDrawerModal(true);
   };
+
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-PH", {
@@ -848,6 +858,7 @@ export default function CashFlowManager() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
